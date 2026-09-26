@@ -1,0 +1,2739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Job City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1c2c; }
+  body { display: flex; align-items: center; justify-content: center; touch-action: none;
+         -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; outline: none; }
+  #fontwarm { position: absolute; left: -999px; top: -999px; font-size: 8px; }
+  #fontwarm span:first-child { font-family: 'Press Start 2P', monospace; }
+  #fontwarm span:last-child { font-family: 'VT323', monospace; }
+</style>
+</head>
+<body>
+<div id="fontwarm"><span>JOB CITY</span><span>Job City</span></div>
+<canvas id="screen" tabindex="0" aria-label="Job City game"></canvas>
+<script>
+'use strict';
+/* =====================================================================
+   JOB CITY  -  an 8-bit English game for A2 learners
+   ---------------------------------------------------------------------
+   TEACHERS: edit the JOBS array below to change names and sentences.
+   Each job:  id, job, place, pronoun ('he'/'she'), base (verb),
+              verbS (verb with -s), rest (rest of the sentence),
+              tag (name shown in the dialogue), group (jobs in the same
+              group are never used as "wrong" answers for each other),
+              sprite (how the character is drawn: skin, hair colour,
+              hair style, shirt, trousers, hat, accessories, prop).
+   Sentence built by the game:  "The baker bakes bread."
+   ===================================================================== */
+const JOBS = [
+  { id:'police',       job:'police officer',    place:'police',       pronoun:'she', base:'investigate', verbS:'investigates', rest:'crimes',              tag:'OFFICER SAM',  group:'safety',
+    sprite:{ skin:'s', hair:'q', style:'bun',   shirt:'i', pants:'i', hat:'police',   acc:['badge'],               prop:'radio' } },
+  { id:'firefighter',  job:'firefighter',       place:'fire',         pronoun:'she', base:'put',         verbS:'puts',         rest:'out fires',           tag:'CAPTAIN ROSA', group:'safety', ing:'putting',
+    sprite:{ skin:'r', hair:'a', style:'long',  shirt:'d', pants:'d', hat:'helmet',   acc:['stripes'],             prop:'hose' } },
+  { id:'doctor',       job:'doctor',            place:'hospital',     pronoun:'he',  base:'help',        verbS:'helps',        rest:'sick people',         tag:'DR. KOFI',     group:'health',
+    sprite:{ skin:'q', hair:'a', style:'short', shirt:'k', pants:'p', hat:'',         acc:['coat','stetho'],       prop:'clipboard' } },
+  { id:'nurse',        job:'nurse',             place:'hospital',     pronoun:'he',  base:'take',        verbS:'takes',        rest:'care of patients',    tag:'NURSE BEN',    group:'health',
+    sprite:{ skin:'s', hair:'e', style:'short', shirt:'l', pants:'l', hat:'nurse',    acc:['pocket'],              prop:'medkit' } },
+  { id:'teacher',      job:'teacher',           place:'school',       pronoun:'he',  base:'teach',       verbS:'teaches',      rest:'children',            tag:'MR. PARK',     group:'school',
+    sprite:{ skin:'s', hair:'a', style:'short', shirt:'g', pants:'q', hat:'',         acc:['tie'],                 prop:'pointer' } },
+  { id:'librarian',    job:'librarian',         place:'library',      pronoun:'she', base:'lend',        verbS:'lends',        rest:'books',               tag:'MS. INES',     group:'school',
+    sprite:{ skin:'r', hair:'o', style:'bun',   shirt:'b', pants:'p', hat:'',         acc:['glasses','cardigan'],  prop:'books' } },
+  { id:'mail',         job:'mail carrier',      place:'post',         pronoun:'she', base:'deliver',     verbS:'delivers',     rest:'letters',             tag:'JO',           group:'office',
+    sprite:{ skin:'s', hair:'d', style:'pony',  shirt:'j', pants:'i', hat:'cap',      hatColor:'j', acc:['bag'],   prop:'letter' } },
+  { id:'clerk',        job:'bank clerk',        place:'bank',         pronoun:'he',  base:'count',       verbS:'counts',       rest:'money',               tag:'MR. RAJ',      group:'office',
+    sprite:{ skin:'r', hair:'a', style:'short', shirt:'p', pants:'p', hat:'',         acc:['shirt','tie'],         prop:'money' } },
+  { id:'cashier',      job:'cashier',           place:'supermarket',  pronoun:'he',  base:'sell',        verbS:'sells',        rest:'food',                tag:'LEO',          group:'food',
+    sprite:{ skin:'s', hair:'q', style:'curly', shirt:'g', pants:'i', hat:'cap',      hatColor:'g', acc:['nametag'], prop:'scanner' } },
+  { id:'baker',        job:'baker',             place:'bakery',       pronoun:'she', base:'bake',        verbS:'bakes',        rest:'bread',               tag:'MIA',          group:'food',
+    sprite:{ skin:'s', hair:'d', style:'pony',  shirt:'d', pants:'o', hat:'baker',    acc:['apron'],               prop:'bread' } },
+  { id:'chef',         job:'chef',              place:'restaurant',   pronoun:'he',  base:'cook',        verbS:'cooks',        rest:'food',                tag:'CHEF ANDRE',   group:'food',
+    sprite:{ skin:'q', hair:'a', style:'short', shirt:'m', pants:'p', hat:'chef',     acc:['scarf','buttons'],     prop:'pan' } },
+  { id:'waiter',       job:'waiter',            place:'restaurant',   pronoun:'she', base:'serve',       verbS:'serves',       rest:'food',                tag:'LILY',         group:'food',
+    sprite:{ skin:'s', hair:'e', style:'bun',   shirt:'m', pants:'a', hat:'',         acc:['vest','bowtie'],       prop:'tray' } },
+  { id:'hairdresser',  job:'hairdresser',       place:'salon',        pronoun:'he',  base:'cut',         verbS:'cuts',         rest:'hair',                tag:'MARCO',        group:'style', ing:'cutting',
+    sprite:{ skin:'s', hair:'b', style:'curly', shirt:'b', pants:'a', hat:'',         acc:['smock'],               prop:'scissors' } },
+  { id:'dentist',      job:'dentist',           place:'dentist',      pronoun:'she', base:'check',       verbS:'checks',       rest:'teeth',               tag:'DR. AMARA',    group:'health',
+    sprite:{ skin:'q', hair:'a', style:'curly', shirt:'l', pants:'l', hat:'',         acc:['coat','mask'],         prop:'toothbrush' } },
+  { id:'pharmacist',   job:'pharmacist',        place:'pharmacy',     pronoun:'he',  base:'give',        verbS:'gives',        rest:'people medicine',     tag:'MR. CHEN',     group:'health',
+    sprite:{ skin:'s', hair:'a', style:'short', shirt:'g', pants:'p', hat:'',         acc:['coat','glasses'],      prop:'pills' } },
+  { id:'reporter',     job:'news reporter',     place:'tv',           pronoun:'she', base:'read',        verbS:'reads',        rest:'the news',            tag:'NINA',         group:'show',
+    sprite:{ skin:'r', hair:'q', style:'long',  shirt:'c', pants:'a', hat:'',         acc:['jacket'],              prop:'mic' } },
+  { id:'camera',       job:'camera operator',   place:'tv',           pronoun:'she', base:'film',        verbS:'films',        rest:'the shows',           tag:'KIM',          group:'show',
+    sprite:{ skin:'s', hair:'a', style:'short', shirt:'p', pants:'i', hat:'cap',      hatColor:'c', acc:['headphones'], prop:'camera' } },
+  { id:'actor',        job:'actor',             place:'theatre',      pronoun:'he',  base:'act',         verbS:'acts',         rest:'in plays',            tag:'OSCAR',        group:'show',
+    sprite:{ skin:'s', hair:'e', style:'short', shirt:'b', pants:'b', hat:'crown',    acc:['cape'],                prop:'mask' } },
+  { id:'singer',       job:'singer',            place:'theatre',      pronoun:'he',  base:'sing',        verbS:'sings',        rest:'songs',               tag:'JAY',          group:'show',
+    sprite:{ skin:'q', hair:'a', style:'curly', shirt:'e', pants:'a', hat:'',         acc:['sparkle','sunglasses'], prop:'mic' } },
+  { id:'receptionist', job:'receptionist',      place:'hotel',        pronoun:'he',  base:'answer',      verbS:'answers',      rest:'the phone',           tag:'OMAR',         group:'office',
+    sprite:{ skin:'r', hair:'a', style:'short', shirt:'c', pants:'a', hat:'bellhop',  acc:['buttons','headset'],   prop:'phone' } },
+  { id:'builder',      job:'builder',           place:'construction', pronoun:'she', base:'build',       verbS:'builds',       rest:'houses',              tag:'BELLA',        group:'work',
+    sprite:{ skin:'s', hair:'d', style:'pony',  shirt:'j', pants:'j', hat:'hardhat',  acc:['hivis'],               prop:'hammer' } },
+  { id:'mechanic',     job:'mechanic',          place:'garage',       pronoun:'she', base:'fix',         verbS:'fixes',        rest:'cars',                tag:'ALEX',         group:'work',
+    sprite:{ skin:'r', hair:'a', style:'short', shirt:'i', pants:'i', hat:'cap',      hatColor:'c', acc:['overall','oil'], prop:'wrench' } },
+  { id:'gardener',     job:'gardener',          place:'park',         pronoun:'he',  base:'water',       verbS:'waters',       rest:'the plants',          tag:'TOM',          group:'work',
+    sprite:{ skin:'s', hair:'r', style:'short', shirt:'e', pants:'g', hat:'cap',      hatColor:'g', acc:['dungarees'], prop:'wateringcan' } },
+  { id:'lifeguard',    job:'lifeguard',         place:'pool',         pronoun:'she', base:'watch',       verbS:'watches',      rest:'the swimmers',        tag:'SARA',         group:'safety',
+    sprite:{ skin:'r', hair:'e', style:'pony',  shirt:'c', pants:'c', hat:'',         acc:['sunglasses','whistle','cross'], prop:'float' } },
+  { id:'busdriver',    job:'bus driver',        place:'bus',          pronoun:'she', base:'drive',       verbS:'drives',       rest:'a bus',               tag:'GRETA',        group:'transport',
+    sprite:{ skin:'s', hair:'n', style:'short', shirt:'j', pants:'i', hat:'driver',   acc:['tie'],                 prop:'wheel' } },
+  { id:'taxidriver',   job:'taxi driver',       place:'bus',          pronoun:'he',  base:'drive',       verbS:'drives',       rest:'a taxi',              tag:'TONY',         group:'transport',
+    sprite:{ skin:'s', hair:'a', style:'short', shirt:'m', pants:'p', hat:'flatcap',  acc:['checks'],              prop:'taxisign' } },
+  { id:'pilot',        job:'pilot',             place:'airport',      pronoun:'she', base:'fly',         verbS:'flies',        rest:'planes',              tag:'CAPTAIN AMY',  group:'transport',
+    sprite:{ skin:'q', hair:'a', style:'bun',   shirt:'i', pants:'i', hat:'pilot',    acc:['wings','cuffs'],       prop:'plane' } },
+  { id:'attendant',    job:'flight attendant',  place:'airport',      pronoun:'he',  base:'look',        verbS:'looks',        rest:'after passengers',    tag:'LUCA',         group:'transport',
+    sprite:{ skin:'s', hair:'q', style:'short', shirt:'h', pants:'h', hat:'pillbox',  acc:['scarf','wings'],       prop:'suitcase' } },
+  { id:'fisher',       job:'fisher',            place:'harbour',      pronoun:'she', base:'catch',       verbS:'catches',      rest:'fish',                tag:'MARINA',       group:'sea',
+    sprite:{ skin:'s', hair:'m', style:'long',  shirt:'e', pants:'e', hat:'souwester', acc:['boots'],              prop:'rod' } },
+  { id:'farmer',       job:'farmer',            place:'farm',         pronoun:'he',  base:'grow',        verbS:'grows',        rest:'vegetables',          tag:'FRED',         group:'animals',
+    sprite:{ skin:'s', hair:'d', style:'short', shirt:'c', pants:'j', hat:'straw',    acc:['dungarees','checks'], prop:'carrots' } },
+  { id:'vet',          job:'vet',               place:'vet',          pronoun:'he',  base:'look',        verbS:'looks',        rest:'after sick animals',  tag:'DR. HUGO',     group:'animals',
+    sprite:{ skin:'r', hair:'a', style:'curly', shirt:'g', pants:'g', hat:'',         acc:['stetho','paw'],        prop:'puppy' } },
+  { id:'zookeeper',    job:'zookeeper',         place:'zoo',          pronoun:'she', base:'feed',        verbS:'feeds',        rest:'the animals',         tag:'ZARA',         group:'animals',
+    sprite:{ skin:'q', hair:'a', style:'pony',  shirt:'r', pants:'q', hat:'safari',   acc:['pocket'],              prop:'bucket' } },
+  { id:'scientist',    job:'scientist',         place:'lab',          pronoun:'she', base:'do',          verbS:'does',         rest:'experiments',         tag:'DR. ADA',      group:'science',
+    sprite:{ skin:'s', hair:'o', style:'curly', shirt:'b', pants:'p', hat:'',         acc:['coat','goggles'],      prop:'flask' } },
+  { id:'collector',    job:'rubbish collector', place:'recycling',    pronoun:'he',  base:'collect',     verbS:'collects',     rest:'rubbish',             tag:'RAY',          group:'work',
+    sprite:{ skin:'q', hair:'a', style:'short', shirt:'g', pants:'g', hat:'cap',      hatColor:'d', acc:['hivis'],  prop:'binbag' } },
+];
+
+/* Places on the city map (x, y, w, h = the building's lot in world pixels). */
+const PLACES = [
+  { id:'hospital',     name:'hospital',          x:186, y:40,  w:56,  h:100 },
+  { id:'pharmacy',     name:'pharmacy',          x:244, y:92,  w:27,  h:48  },
+  { id:'dentist',      name:"dentist's",         x:273, y:94,  w:25,  h:46  },
+  { id:'school',       name:'school',            x:318, y:58,  w:110, h:82  },
+  { id:'tv',           name:'TV studio',         x:450, y:66,  w:52,  h:74  },
+  { id:'lab',          name:'science lab',       x:505, y:74,  w:57,  h:66  },
+  { id:'police',       name:'police station',    x:186, y:226, w:52,  h:60  },
+  { id:'fire',         name:'fire station',      x:240, y:208, w:58,  h:78  },
+  { id:'library',      name:'library',           x:318, y:230, w:56,  h:56  },
+  { id:'bank',         name:'bank',              x:376, y:228, w:54,  h:58  },
+  { id:'theatre',      name:'theatre',           x:450, y:222, w:52,  h:64  },
+  { id:'hotel',        name:'hotel',             x:504, y:194, w:34,  h:92  },
+  { id:'salon',        name:'hair salon',        x:540, y:236, w:22,  h:50  },
+  { id:'supermarket',  name:'supermarket',       x:186, y:384, w:64,  h:46  },
+  { id:'bakery',       name:'bakery',            x:253, y:380, w:45,  h:50  },
+  { id:'restaurant',   name:'restaurant',        x:318, y:376, w:60,  h:54  },
+  { id:'post',         name:'post office',       x:381, y:374, w:49,  h:56  },
+  { id:'park',         name:'park',              x:448, y:314, w:62,  h:118 },
+  { id:'pool',         name:'swimming pool',     x:513, y:330, w:49,  h:100 },
+  { id:'farm',         name:'farm',              x:4,   y:26,  w:160, h:114 },
+  { id:'zoo',          name:'zoo',               x:4,   y:168, w:160, h:118 },
+  { id:'vet',          name:'vet clinic',        x:4,   y:382, w:44,  h:48  },
+  { id:'garage',       name:'garage',            x:50,  y:376, w:56,  h:54  },
+  { id:'recycling',    name:'recycling centre',  x:108, y:366, w:58,  h:64  },
+  { id:'airport',      name:'airport',           x:582, y:22,  w:136, h:118 },
+  { id:'bus',          name:'bus station',       x:582, y:220, w:70,  h:66  },
+  { id:'construction', name:'construction site', x:655, y:178, w:63,  h:108 },
+  { id:'harbour',      name:'harbour',           x:582, y:310, w:138, h:130 },
+];
+const SUGGEST = ['bakery','school','police','fire','hospital','supermarket','park','farm','airport','zoo'];
+
+/* ---------- palette (Sweetie 16 + 2 browns + 1 skin) ---------- */
+const PAL = {
+  a:'#1a1c2c', b:'#5d275d', c:'#b13e53', d:'#ef7d57', e:'#ffcd75', f:'#a7f070', g:'#38b764', h:'#257179',
+  i:'#29366f', j:'#3b5dc9', k:'#41a6f6', l:'#73eff7', m:'#f4f4f4', n:'#94b0c2', o:'#566c86', p:'#333c57',
+  q:'#7a4b2a', r:'#a0663a', s:'#f5c7a0'
+};
+const C = PAL; // short alias used by drawing code
+const WORLD_W = 720, WORLD_H = 440, VW = 320, VH = 200;
+
+/* derived data */
+const PLACE = {}; PLACES.forEach(p => { PLACE[p.id] = p; p.jobs = []; });
+const JOB = {};
+JOBS.forEach(j => {
+  JOB[j.id] = j;
+  if (PLACE[j.place]) PLACE[j.place].jobs.push(j.id);
+  if (!j.ing) {
+    const b = j.base;
+    j.ing = /[^e]e$/.test(b) ? b.slice(0, -1) + 'ing' : b + 'ing';
+  }
+});
+
+/* =====================================================================
+   SPRITES  (strings of palette letters, cached to offscreen canvases)
+   '.' = transparent.  Upper-case letters are replaced per sprite:
+   X = main colour, U = its shade, K = skin, H = hair, S = shirt ...
+   ===================================================================== */
+const SHADE = { a:'a', b:'a', c:'b', d:'c', e:'d', f:'g', g:'h', h:'i', i:'a', j:'i', k:'j', l:'k', m:'n', n:'o', o:'p', p:'a', q:'a', r:'q', s:'r' };
+const SPR = {};
+const sprCache = {};
+function defSpr(name, rows, opts) { SPR[name] = { rows, opts: opts || {} }; }
+function newCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+function rowsToCanvas(rows, subs, outline, flip) {
+  const h = rows.length; let w = 0;
+  rows.forEach(r => { if (r.length > w) w = r.length; });
+  const pad = outline ? 1 : 0;
+  const grid = [];
+  for (let y = 0; y < h + pad * 2; y++) grid.push(new Array(w + pad * 2).fill(null));
+  for (let y = 0; y < h; y++) {
+    const r = rows[y];
+    for (let x = 0; x < r.length; x++) {
+      let ch = r[x]; if (ch === '.' || ch === ' ') continue;
+      if (subs && subs[ch]) ch = subs[ch];
+      if (!PAL[ch]) continue;
+      grid[y + pad][(flip ? (w - 1 - x) : x) + pad] = ch;
+    }
+  }
+  if (outline) addOutline(grid, typeof outline === 'string' ? outline : 'a');
+  return gridToCanvas(grid);
+}
+function addOutline(grid, col) {
+  const h = grid.length, w = grid[0].length, add = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (grid[y][x]) continue;
+    if ((y > 0 && grid[y-1][x] && grid[y-1][x] !== '#') || (y < h-1 && grid[y+1][x] && grid[y+1][x] !== '#') ||
+        (x > 0 && grid[y][x-1] && grid[y][x-1] !== '#') || (x < w-1 && grid[y][x+1] && grid[y][x+1] !== '#')) add.push([x, y]);
+  }
+  add.forEach(([x, y]) => grid[y][x] = col);
+}
+function gridToCanvas(grid) {
+  const h = grid.length, w = grid[0].length, c = newCanvas(w, h), g = c.getContext('2d');
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const ch = grid[y][x]; if (!ch) continue;
+    g.fillStyle = PAL[ch]; g.fillRect(x, y, 1, 1);
+  }
+  return c;
+}
+/* get a cached sprite canvas. subs e.g. {X:'c'} ; U defaults to shade of X */
+function spr(name, subs, flip) {
+  const key = name + (subs ? JSON.stringify(subs) : '') + (flip ? 'F' : '');
+  let c = sprCache[key];
+  if (!c) {
+    const d = SPR[name]; if (!d) return null;
+    const s = Object.assign({}, d.opts.subs || {}, subs || {});
+    if (s.X && !s.U) s.U = SHADE[s.X];
+    c = sprCache[key] = rowsToCanvas(d.rows, s, d.opts.outline, flip);
+  }
+  return c;
+}
+function drawSpr(g, name, x, y, subs, flip) { const c = spr(name, subs, flip); if (c) g.drawImage(c, Math.round(x), Math.round(y)); return c; }
+function sprW(name) { const c = spr(name); return c ? c.width : 0; }
+
+/* ---------------- vehicles ---------------- */
+defSpr('car', ['...XXXXX....','..XlXXXlXX..','.XllXXXllXX.','XXXXXXXXXXXX','XXXXXXXXXXXe','UUUUUUUUUUUU','.an.....an..','.aa.....aa..'], { outline:true, subs:{X:'c'} });
+defSpr('carV', ['.XXXXXX.','aXXXXXXa','aXllllXa','.XXXXXX.','.XXXXXX.','.XllllX.','aXXXXXXa','aXXXXXXa','.eUUUUe.'], { outline:true, subs:{X:'j'} });
+defSpr('taxi', ['....aea.....','...XXXXX....','..XlXXXlXX..','.XllXXXllXX.','aXaXaXaXaXaX','XXXXXXXXXXXe','UUUUUUUUUUUU','.an.....an..','.aa.....aa..'], { outline:true, subs:{X:'e'} });
+defSpr('bus', ['XXXXXXXXXXXXXXXXXXXXX.','XllXllXllXllXllXlllllX','XllXllXllXllXllXlllllX','XXXXXXXXXXXXXXXXXXXXXX','XmmmmmmmmmmmmmmmmmmmmX','XXXXXXXXXXXXXXXXXXXXXe','UUUUUUUUUUUUUUUUUUUUUU','..ana..........ana....','..aaa..........aaa....'], { outline:true, subs:{X:'g'} });
+defSpr('police_car', ['.....jc.....','...mmmmm....','..mlmmmlmm..','.mllmmmllmm.','aaaaaaaaaaaa','mmmjjjjmmmme','pppppppppppp','.an.....an..','.aa.....aa..'], { outline:true });
+defSpr('ambulance', ['.......cj...','mmmmmmmmm...','mmmcmmmmlm..','mmcccmmmllm.','mmmcmmmmmmmm','ccccccccccce','nnnnnnnnnnnn','.an.....an..','.aa.....aa..'], { outline:true });
+defSpr('schoolbus', ['eeeeeeeeeeeeeeeeeee.','ellellellellelllllle','ellellellellelllllle','eeeeeeeeeeeeeeeeeeee','eaaaaaaaaaaaaaaaaaae','eeeeeeeeeeeeeeeeeeem','dddddddddddddddddddd','..ana.........ana...','..aaa.........aaa...'], { outline:true });
+defSpr('mailvan', ['mmmmmmmm....','mjjjjjjm....','mmmmmmmmmm..','mjmmmjmmllm.','mjjjjjjmmmmm','mmmmmmmmmmme','nnnnnnnnnnnn','.an.....an..','.aa.....aa..'], { outline:true });
+defSpr('garbage', ['gggggggggg.....','gmgmgmgmgg.....','ggggggggggXXX..','ghghghghgXllX..','ggggggggggXXXX.','gggggggggggggge','hhhhhhhhhhhhhhh','.ana....ana.an.','.aaa....aaa.aa.'], { outline:true, subs:{X:'e'} });
+defSpr('tractor', ['.......aa...','......rlll..','......rlll..','.cc...rrrr..','cccccccccce.','c.cccccc.cc.','.aaa...aaaa.','anna..anppna','.aaa..annna.','.......aaa..'], { outline:true });
+defSpr('mixer', ['....nnnn....','...nonnon...','..nnnonnon..','..nnnnonnn.e','.eeeeeeeeeee','.eeeeeeeelle','.oooooooooo.','.an.....ana.','.aa.....aaa.'], { outline:true });
+defSpr('plane', ['..........c.....','.........cc.....','mmmmmmmmmmmmm...','mlmlmlmlmlmmmm..','mmmmmmmmmmmmmmm.','.nnnnnjjjjnnnn..','.....jjjj.......','......jj........'], { outline:true });
+defSpr('planeTop', ['.......m.......','......mmm......','......mlm......','......mmm......','mmmmmmmmmmmmmmm','.nnnnnmmmnnnnn.','......mmm......','......mmm......','.....mmmmm.....','......nnn......'], { outline:true });
+defSpr('boat', ['......m.......','......mc......','......mcc.....','......m.......','.mmmmmmmmm....','.mllmmmmmm....','ccccccccccccc.','.cmcmcmcmcmc..','..ccccccccc...'], { outline:true });
+defSpr('firetruckFront', ['..cccccccc..','.cllllllllc.','.cllllllllc.','.cccccccccc.','ccmmmmmmmmcc','ceeccccccEec','cccccccccccc','cnnnnnnnnnnc','.aa......aa.','.aa......aa.'], { outline:true, subs:{E:'e'} });
+
+/* ---------------- people & animals ---------------- */
+defSpr('ped0', ['.HH.','HKKH','.KK.','SSSS','KSSK','.SS.','.TT.','.T.T','.O.O'], { outline:true });
+defSpr('ped1', ['.HH.','HKKH','.KK.','SSSS','KSSK','.SS.','.TT.','.TT.','.OO.'], { outline:true });
+defSpr('cow', ['..........m.','mmaammmmmmam','maaammaammmm','mmmmmmaammss','mmmmmmmmmm..','.a.a...a.a..'], { outline:true });
+defSpr('sheep', ['.mmmmm...','mmmmmmmaa','mmmmmmmaa','.mmmmm...','.a.a.a.a.'], { outline:true });
+defSpr('chicken', ['.c..','.mm.','mmmd','mmm.','.e..'], { outline:true });
+defSpr('duck', ['..mm..','..mad.','mmmmm.','.mmm..'], { outline:true });
+defSpr('giraffe', ['.q.q....','.eeee...','eeaeeee.','.eeeeeq.','..eq....','..ee....','..qe....','..ee....','..eq....','..ee....','..qe....','..ee....'], { outline:true });
+defSpr('elephant', ['...nnnnn......','..nnnnnnnn....','.nnnnnnnnnnn..','nnnnnnnnnnnaon','nnnnnnnnnnnnon','nnnnnnnnnnn.on','.nn.nn..nn..o.','.nn.nn..nn....'], { outline:true, subs:{} });
+defSpr('dog', ['.........rr.','.........rar','r.rrrrrrrrrq','.rrrrrrrrr..','.rr.....rr..','.r.......r..'], { outline:true });
+defSpr('gull0', ['m...m','.mnm.','..n..'], { outline:'p' });
+defSpr('gull1', ['.....','mmnmm','..n..'], { outline:'p' });
+defSpr('fish', ['.kk..k','kkakkk','.kkk.k'], { outline:true });
+
+/* ---------------- nature ---------------- */
+defSpr('tree', ['...gggggg...','..gffgggggg.','.gfffgggggg.','gffgggggghgg','ggggggghgggh','gggggghggghg','.gggghgghhgh','..ghhhhhhhh.','....hqqh....','.....qq.....','.....rq.....','....qqqq....'], { outline:true });
+defSpr('pine', ['....g....','...gfg...','...ggg...','..gfggg..','..ggghg..','.gfgggghg.','.gggghhgg.','gggghhhhgh','.hhhhhhhh.','....qq....','....qq....'], { outline:true });
+defSpr('bush', ['.gggg..','gfgggg.','ggggghg','.ghhhh.'], { outline:true });
+defSpr('lamp', ['.ee.','peep','.pp.','.p..','.p..','.p..','.p..','.p..','ppp.'], { outline:false });
+defSpr('bench', ['qrrrrrrq','rrrrrrrr','qqqqqqqq','p.....p.'], { outline:true });
+defSpr('hydrant', ['.cc.','cccc','.cc.','cccc','.cc.'], { outline:true });
+defSpr('cone', ['..d..','..m..','.ddd.','.mmm.','ddddd'], { outline:true });
+defSpr('trolley', ['n.....','nnnnnn','nonono','nnnnnn','.n..n.','.a..a.'], {});
+defSpr('postbox', ['.ccc.','ccccc','caaac','ccccc','ccccc','ccccc','.ppp.'], { outline:true });
+defSpr('tyre', ['.aaaa.','aappaa','aa..aa','aappaa','.aaaa.'], {});
+defSpr('drum', ['.jjj.','jkjjj','jjjjj','ieeei','jjjjj','jjjjj'], { outline:true });
+defSpr('bin', ['XXXXX','UUUUU','XXXXX','XmXmX','XXXXX','XXXXX'], { outline:true });
+defSpr('carrier', ['.ppp.','pnnnp','pnanp','pnnnp','ppppp'], { outline:true });
+defSpr('crate', ['rrrrrr','qrqrqr','rrrrrr','qqqqqq'], { outline:true });
+defSpr('suitcaseS', ['.pp.','cccc','cmmc','cccc'], { outline:true });
+
+/* ---------------- icons & signs ---------------- */
+defSpr('i_cross', ['...ccc...','...ccc...','ccccccccc','ccccccccc','ccccccccc','...ccc...','...ccc...'], { outline:'m' });
+defSpr('i_gcross', ['..ff..','..ff..','ffffff','ffffff','..ff..','..ff..'], {});
+defSpr('i_flame', ['...c.....','..cc..c..','..cdc.cc.','.cddcdcc.','.cdddddc.','cddeeeddc','cdeeeeedc','.cdeeedc.','..ccccc..'], { outline:true });
+defSpr('i_env', ['mmmmmmmmm','nmmmmmmmn','mnmmmmmnm','mmnmmmnmm','mmmnmnmmm','mmmmnmmmm','mmmmmmmmm'], { outline:true });
+defSpr('i_coin', ['..eee..','.eeeee.','eedddee','ededeee','eedddee','eeeedee','.edddee'.slice(0,7),'..eee..'], { outline:true });
+defSpr('i_coinS', ['.ee.','eede','eede','.ee.'], { outline:true });
+defSpr('i_bread', ['...rrrr...','.rrerrerr.','rreerreerr','rerrrerrrr','rrrrrrrrrr','.qqqqqqqq.'], { outline:true });
+defSpr('i_chefhat', ['.mm.mm.','mmmmmmm','mmmmmmm','.mmmmm.','.mmmmm.','.nnnnn.'], { outline:true });
+defSpr('i_scissors', ['n.....n','nn...nn','.nn.nn.','..nnn..','...n...','..c.c..','.cc.cc.','c..c..c','.cc.cc.'], { outline:true });
+defSpr('i_tooth', ['.mm...mm.','mmmm.mmmm','mmmmmmmmm','mmammmamm','mmmmmmmmm','mmcmmmcmm','nmmcccmmn','.mmmnmmm.','.mmm.mmm.','.mn...nm.'], { outline:true });
+defSpr('i_paw', ['.X.X.','.....','X.X.X','.XXX.','XXXXX','.XXX.'], { subs:{X:'m'} });
+defSpr('i_flask', ['..nnn..','..mlm..','..mlm..','.mfffm.','mfffffm','mfgffgm','mffffgm','.mmmmm.'], { outline:true });
+defSpr('i_recycle', ['....g....','...gfg...','..gf.gg..','.gg...gg.','gg.....gg','g.......g','ggggggggg','.fffffff.'], { outline:true });
+defSpr('i_masks', ['.eeee.kkkk.','eaeeaekakkk','eeeeeekkkk.','eaeeaekkakk','.eaae.kakk.','..ee...kk..'], { outline:true });
+defSpr('i_book', ['mmmmm.mmmmm','mnnnmqmnnnm','mmmmmqmmmmm','mnnnmqmnnnm','mmmmmqmmmmm','cccccqccccc'], { outline:true });
+defSpr('i_wrench', ['.n...n.','.nn.nn.','..nnn..','...n...','...n...','...n...','..nnn..','.nn.nn.'], { outline:true });
+defSpr('i_star', ['..e..','.eee.','eeeee','.eee.','.e.e.'], { outline:true });
+defSpr('i_starBig', ['....e....','...eee...','...eme...','eeeeeeeee','.eeeeeee.','..eeeee..','..ee.ee..','.ee...ee.'], { outline:true });
+defSpr('i_starOff', ['....p....','...ppp...','...ppp...','ppppppppp','.ppppppp.','..ppppp..','..pp.pp..','.pp...pp.'], { outline:true });
+defSpr('i_heart', ['.cc.cc.','cmccccc','ccccccc','.ccccc.','..ccc..','...c...'], { outline:true });
+defSpr('i_heartOff', ['.pp.pp.','ppppppp','ppppppp','.ppppp.','..ppp..','...p...'], { outline:true });
+defSpr('i_case', ['...qqq...','..q...q..','rrrrrrrrr','rrrreerrr','qqqqeeqqq','rrrrrrrrr','rrrrrrrrr'], { outline:true });
+defSpr('i_speaker', ['...m.....','..mm..m..','mmmm...m.','mmmm.m.m.','mmmm...m.','..mm..m..','...m.....'], {});
+defSpr('i_arrow', ['eeeeeee','eeeeeee','.eeeee.','..eee..','...e...'], { outline:true });
+defSpr('i_gear', ['..m.m..','.mmmmm.','mmm.mmm','mm...mm','mmm.mmm','.mmmmm.','..m.m..'], {});
+defSpr('i_map', ['.mm.mm.','mmmmmmm','m.mm.mm','mmmm.mm','mm.mmmm','mmmmmmm'], {});
+defSpr('i_note', ['..mmmm','..m..m','..m..m','.mm.mm','mmmmmm','.mm.mm'], {});
+defSpr('i_home', ['...m...','..mmm..','.mmmmm.','mmmmmmm','.mm.mm.','.mm.mm.'], {});
+
+/* ---------------- characters (16 x 24 base, composed from layers) ---------------- */
+const BODY = [
+  '................','................','................','................',
+  '.....KKKKKK.....','....KKKKKKKK....','....KKKKKKKK....','...KKKEKKEKKK...',
+  '...KKKKKKKKKK...','....KKKMMKKK....','.....KKKKKK.....','......KKKK......',
+  '....SSSSSSSS....','...SSSSSSSSSS...','..SUSSSSSSSSUS..','..SUSSSSSSSSUS..',
+  '..SUSSSSSSSSUS..','..KKSSSSSSSSKK..','....SSSSSSSS....','....TTTTTTTT....',
+  '....TTTTTTTT....','....TTV..VTT....','....TTV..VTT....','...OOOO..OOOO...'];
+const HAIR = {
+  short: [3, '.....HHHHHH.....','....HHHHHHHH....','....HH....HH....','....H......H....'],
+  long:  [3, '.....HHHHHH.....','....HHHHHHHH....','...HHH....HHH...','...HH......HH...','...H........H...','...H........H...','...HH......HH...','...HH......HH...','...HH......HH...'],
+  bun:   [1, '......HHHH......','......HGGH......','.....HHHHHH.....','....HHHHHHHH....','....HH....HH....','....H......H....'],
+  pony:  [3, '.....HHHHHH.....','....HHHHHHHH.H..','....HH....HHHH..','....H......H.HH.','............GH..','............HG..','.............H..'],
+  curly: [2, '....HHGHHGHH....','...HHHHHHHHHH...','...HGHHHHHHGH...','...HH......HH...','...H........H...'],
+};
+const HATS = {
+  police:   [2, '.....iiiiii.....','....iiiiiiii....','....iiieeiii....','...aaaaaaaaaa...'],
+  helmet:   [1, '.....cccccc.....','....cccccccc....','....ccceeccc....','....ccceeccc....','..cccccccccccc..'],
+  nurse:    [1, '.....mmcmmm.....','.....mcccmm.....','....mmmcmmmm....'],
+  cap:      [2, '.....XXXXXX.....','....XXXXXXXX....','....XXXXXXXXXXX.'],
+  baker:    [0, '.....mmmmmm.....','....mmmmmmmm....','....mmmmmmmm....','....mnmmnmmm....','....nnnnnnnn....'],
+  chef:     [-3,'....mm.mm.mm....','...mmmmmmmmmm...','...mmmmmmmmmm...','....mmmmmmmm....','....mmmnmmmm....','....mmmmmmmm....','....mmmmmmmm....','....nnnnnnnn....'],
+  crown:    [1, '....e.e..e.e....','....eeeeeeee....','....ecekkece....'],
+  bellhop:  [1, '......cccc......','......cccc......','......eeee......'],
+  hardhat:  [1, '.....eeeeee.....','....eeeeeeee....','....eedeedee....','...eeeeeeeeee...','..dddddddddddd..'],
+  driver:   [2, '....iiiiiiii....','...iiiiiiiiii...','....iiieeiii....','....aaaaaaaa....'],
+  flatcap:  [2, '.....oooooo.....','....onononoo....','....oooooooooo..'],
+  pilot:    [1, '.....iiiiii.....','....iiiiiiii....','...iiiiiiiiii...','....iieeeeii....','....aaaaaaaa....'],
+  pillbox:  [1, '......hhhh......','.....hhhhhh.....','.....heeeeh.....'],
+  souwester:[2, '.....eeeeee.....','....eeeeeeee....','...eeeeeeeeee...','..ee........ee..','..e..........e..'],
+  straw:    [1, '.....eeeeee.....','.....eeeeee.....','.....ecccce.....','.eeeeeeeeeeeeee.'],
+  safari:   [1, '.....rrrrrr.....','....rrrrrrrr....','....qqqqqqqq....','..rrrrrrrrrrrr..'],
+};
+const ACC = {
+  badge:     [13, '..........e.....','.........eee....','..........e.....'],
+  stripes:   [16, '..eeeeeeeeeeee..','................','................','................','....eeeeeeee....'],
+  coat:      [12, '....mmmSSmmm....','...mmmmSSmmmm...','..mnmmmSSmmmnm..','..mnmmmSSmmmnm..','..mnmmmSSmmmnm..','..KKmmmSSmmmKK..','....mmmSSmmm....','....mmTTTTmm....','....mm....mm....'],
+  stetho:    [12, '......p..p......','......p..p......','.......pp.......','.......n........'],
+  pocket:    [13, '..........c.....','..........mm....'],
+  tie:       [12, '.......cc.......','.......cc.......','......cccc......','.......cc.......','.......cc.......'],
+  shirt:     [12, '......mmmm......','......m..m......','......m..m......','......m..m......','......m..m......','......m..m......'],
+  glasses:   [7,  '.....pEppEp.....'],
+  cardigan:  [12, '....ccc..ccc....','...cccc..cccc...','..cUccc..cccUc..','..cUccc..cccUc..','..cUccc..cccUc..','..KKccc..cccKK..','....ccc..ccc....'],
+  bag:       [12, '..........q.....','.........q......','........q.......','.......q........','......q.........','.qqqqq..........','.qrrrq..........','.qqqqq..........'],
+  nametag:   [14, '..........mm....'],
+  apron:     [13, '......mmmm......','......mmmm......','.....mmmmmm.....','.....mmmmmm.....','....mmmmmmmm....','....mmmmmmmm....','....mmmmmmmm....'],
+  scarf:     [11, '......cccc......','.......cc.......'],
+  buttons:   [13, '......p..p......','................','......p..p......','................','......p..p......'],
+  vest:      [12, '....aa....aa....','...aaa....aaa...','...aaaa..aaaa...','...aaaa..aaaa...','...aaaa..aaaa...','....aaa..aaa....'],
+  bowtie:    [12, '......cccc......'],
+  smock:     [13, '..........n.....','..........n.....'],
+  mask:      [8,  '...nllllllllln..','....llllllll....','.....llllll.....'],
+  jacket:    [12, '......mmmm......','.......mm.......'],
+  headphones:[3,  '...aaaaaaaaaa...','...a........a...','...a........a...','...a........a...','..pp........pp..','..pp........pp..'],
+  cape:      [11, '.....mmmmmm.....','..c..........c..','.cc..........cc.','.cc..........cc.','.cc..........cc.','.cc..........cc.','.cc..........cc.','.cc..........cc.','.cc..........cc.','.cc..........cc.','.cc..........cc.','..c..........c..'],
+  sparkle:   [13, '....m.....m.....','................','.......m....m...','................','.....m....m.....'],
+  sunglasses:[7,  '....aaaaaaaa....'],
+  headset:   [6,  '...p............','...p............','...pp...........','....ppp.........'],
+  hivis:     [12, '....dd....dd....','...ddd....ddd...','...dddddddddd...','...eeeeeeeeee...','...dddddddddd...','....dddddddd....'],
+  overall:   [12, '.......mm.......','........p.......','........p.......','........p.......','........p.......','........p.......'],
+  oil:       [15, '....a...........','..........a.....','................','................','.....a..........'],
+  dungarees: [12, '....T......T....','....T......T....','....TeTTTTeT....','....TTTTTTTT....','....TTTTTTTT....','....TTTTTTTT....','....TTTTTTTT....'],
+  whistle:   [12, '......n..n......','.......nn.......','.......ee.......'],
+  cross:     [14, '.......mm.......','......mmmm......','.......mm.......'],
+  wings:     [13, '.........eee....','..........e.....'],
+  cuffs:     [16, '..ee........ee..'],
+  boots:     [21, '....hhh..hhh....','....hhh..hhh....','...hhhh..hhhh...'],
+  paw:       [13, '..........m.....','.........mmm....'],
+  goggles:   [6,  '....pppppppp....','...pllEllEllp...','....pppppppp....'],
+  checks:    null, // special: checked shirt pattern
+};
+const PROPS = {
+  radio:      [13, 14, ['a.','pp','pk','pp','pp']],
+  hose:       [12, 8,  ['......ee','....eee.','...ee...','..oo....','..o.....','.oo.....','.o......','.oo.....','..ooo...']],
+  clipboard:  [12, 13, ['..pp..','qqqqqq','qmmmmq','qmaamq','qmmmmq','qmaamq','qmmmmq','qqqqqq']],
+  medkit:     [11, 15, ['..pp...','mmmmmmm','mmmcmmm','mmcccmm','mmmcmmm','mmmmmmm']],
+  pointer:    [13, 6,  ['......m','.....q.','.....q.','....q..','....q..','...q...','...q...','..q....','..q....','.q.....','.q.....','q......']],
+  books:      [10, 15, ['ccccccm','eeeeeem','jjjjjjm','ggggggm']],
+  letter:     [12, 14, ['mmmmmm','nmmmmn','mnmmnm','mmnnmm','mmmmmm']],
+  money:      [12, 14, ['gggggg','gffffg','gfggfg','gffffg','gggggg']],
+  scanner:    [12, 14, ['pppp','pccp','pppp','.pp.','.pp.']],
+  bread:      [11, 14, ['..rrrr..','.rreerr.','rreeeerr','rrrrrrrr','.qqqqqq.']],
+  pan:        [11, 15, ['.pppp.....','ppmepp....','pppppppqqq','.pppp.....']],
+  tray:       [10, 14, ['..l.....','..l..m..','..l.mmm.','nnnnnnnn']],
+  scissors:   [12, 12, ['n...n','nn.nn','.nnn.','..n..','.c.c.','c.c.c','.c.c.']],
+  toothbrush: [13, 7,  ['mmm','lll','k..','k..','k..','k..','k..','k..','k..','k..','k..']],
+  pills:      [12, 13, ['.nn.','gggg','gmmg','gmmg','gggg']],
+  mic:        [13, 11, ['pp','pp','jj','a.','a.','a.']],
+  camera:     [11, 9,  ['..aa......','pppppppp..','pppppppppl','ppkppppppl','pppppppp..','...p......']],
+  mask:       [12, 9,  ['.eeee.','eaeeae','eeeeee','eaeeae','.eaae.','..q...','..q...','..q...','..q...']],
+  phone:      [11, 14, ['cc..cc','cccccc','.cmmc.','cccccc']],
+  hammer:     [12, 9,  ['oooo','oooo','.q..','.q..','.q..','.q..','.q..','.q..','.q..']],
+  wrench:     [12, 9,  ['n.n','nnn','.n.','.n.','.n.','.n.','.n.','nnn','n.n']],
+  wateringcan:[11, 13, ['.......l','..ggg.g.','.g...gg.','gggggg..','gggggg..','.gggg...']],
+  float:      [11, 12, ['.cmc.','c...c','m...m','c...c','.cmc.']],
+  wheel:      [10, 12, ['.pppp.','p.pp.p','pppppp','p.pp.p','.pppp.']],
+  taxisign:   [12, 10, ['aeaeae','eeeeee','eaeaea','..p...','..p...','..p...','..p...']],
+  plane:      [12, 11, ['...m...','..mmm..','mmmmmmm','..mmm..','...m...','..mmm..']],
+  suitcase:   [12, 15, ['..pp..','cccccc','cmccmc','cccccc','cccccc','.a..a.']],
+  rod:        [12, 2,  ['........qq','........qm','.......q.m','.......q.m','......q..m','......q..m','.....q...k','.....q..kkk','....q....k.','....q.....','...q......','...q......','..q.......','..q.......','.q........','q.........']],
+  carrots:    [10, 13, ['..g.g.g.','.dgdgdg.','..d.d.d.','rrrrrrrr','.rqrqrq.','.rrrrrr.']],
+  puppy:      [10, 12, ['....rr..','....rarq','rrrrrrrr','rrrrrr..','.r..r...']],
+  bucket:     [11, 14, ['.kk.k.','n.kkkn','.n..n.','oooooo','onnnno','oooooo','.oooo.']],
+  flask:      [12, 11, ['..n..','.nmn.','.mfm.','mfffm','mfgfm','mfffm','.mmm.']],
+  binbag:     [11, 13, ['...a...','..ppp..','.ppppp.','ppppppp','ppppopp','ppppppp','.ppppp.']],
+};
+const CH_W = 26, CH_H = 30, CH_OX = 5, CH_OY = 4; // character canvas size and body offset
+const charCache = {};
+function composeChar(job) {
+  const sp = job.sprite, grid = [];
+  for (let y = 0; y < CH_H; y++) grid.push(new Array(CH_W).fill(null));
+  const put = (x, y, ch) => {
+    const gx = x + CH_OX, gy = y + CH_OY;
+    if (gx < 0 || gy < 0 || gx >= CH_W || gy >= CH_H) return;
+    grid[gy][gx] = ch;
+  };
+  const layer = (def, x0) => {
+    if (!def) return;
+    const y0 = def[0];
+    for (let i = 1; i < def.length; i++) {
+      const r = def[i];
+      for (let x = 0; x < r.length; x++) if (r[x] !== '.') put(x + (x0 || 0), y0 + i - 1, r[x]);
+    }
+  };
+  layer([0].concat(BODY));
+  if (sp.acc && sp.acc.indexOf('checks') >= 0) {
+    for (let y = 12; y <= 18; y++) for (let x = 0; x < 16; x++) {
+      const g = grid[y + CH_OY][x + CH_OX];
+      if (g === 'S' && ((x >> 1) + (y >> 1)) % 2 === 0) grid[y + CH_OY][x + CH_OX] = 'U';
+    }
+  }
+  (sp.acc || []).forEach(a => { if (a === 'coat' || a === 'hivis' || a === 'dungarees' || a === 'vest' || a === 'cardigan' || a === 'apron') layer(ACC[a]); });
+  (sp.acc || []).forEach(a => { if (!(a === 'coat' || a === 'hivis' || a === 'dungarees' || a === 'vest' || a === 'cardigan' || a === 'apron')) layer(ACC[a]); });
+  if (sp.hat !== 'chef' && sp.hat !== 'helmet' && sp.hat !== 'souwester' && sp.hat !== 'hardhat' && sp.hat !== 'pilot' && sp.hat !== 'police') layer(HAIR[sp.style] || HAIR.short);
+  else if (sp.style === 'long' || sp.style === 'pony') layer(HAIR[sp.style]);
+  if (sp.hat) layer(HATS[sp.hat]);
+  if (sp.acc && sp.acc.indexOf('headphones') >= 0) layer(ACC.headphones);
+  const pr = PROPS[sp.prop];
+  if (pr) { const d = [pr[1]].concat(pr[2]); layer(d, pr[0]); }
+  return grid;
+}
+function charCanvas(jobId, breath, blink, silhouette) {
+  const key = jobId + '|' + (breath ? 1 : 0) + (blink ? 1 : 0) + (silhouette ? 1 : 0);
+  if (charCache[key]) return charCache[key];
+  const job = JOB[jobId], sp = job.sprite;
+  let grid = composeChar(job);
+  if (breath) { // head sinks 1px: rows above the shoulders move down
+    const cut = 11 + CH_OY, g2 = grid.map(r => r.slice());
+    for (let y = cut; y >= 1; y--) for (let x = 0; x < CH_W; x++) {
+      const up = grid[y - 1][x];
+      if (y === cut) { if (up) g2[y][x] = up; } else g2[y][x] = up;
+    }
+    g2[0] = new Array(CH_W).fill(null);
+    grid = g2;
+  }
+  const map = { K: sp.skin, H: sp.hair, G: SHADE[sp.hair], S: sp.shirt, U: SHADE[sp.shirt], T: sp.pants, V: SHADE[sp.pants],
+                X: sp.hatColor || 'c', E: blink ? sp.skin : 'a', M: sp.skin === 'q' ? 'c' : 'c', O: 'p' };
+  for (let y = 0; y < CH_H; y++) for (let x = 0; x < CH_W; x++) {
+    let ch = grid[y][x]; if (!ch) continue;
+    if (map[ch]) ch = map[ch];
+    if (!PAL[ch]) ch = null;
+    grid[y][x] = silhouette ? (ch ? 'p' : null) : ch;
+  }
+  addOutline(grid, silhouette ? 'a' : 'a');
+  return (charCache[key] = gridToCanvas(grid));
+}
+
+/* =====================================================================
+   ENGINE: screen scaling, pixel layer + text layer, input, audio, save
+   ===================================================================== */
+const screenCv = document.getElementById('screen');
+const D = screenCv.getContext('2d');
+const PB = newCanvas(VW, VH);            // the 320x200 pixel-art buffer
+const P = PB.getContext('2d');
+P.imageSmoothingEnabled = false;
+let S = 3, DPR = 1, CSS_SCALE = 3;       // integer device-pixel scale
+
+function resize() {
+  DPR = window.devicePixelRatio || 1;
+  const w = window.innerWidth * DPR, h = window.innerHeight * DPR;
+  S = Math.max(1, Math.floor(Math.min(w / VW, h / VH)));
+  screenCv.width = VW * S; screenCv.height = VH * S;
+  screenCv.style.width = (VW * S / DPR) + 'px';
+  screenCv.style.height = (VH * S / DPR) + 'px';
+  CSS_SCALE = S / DPR;
+  D.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize);
+resize();
+/* dialogue text: at least 24px on screen when the screen allows it */
+function dlgSize() { return Math.max(8, Math.min(12, Math.ceil(24 / CSS_SCALE))); }
+
+/* ---------- text queue (text is drawn crisp at full resolution) ---------- */
+let TQ = [];
+const FONT_PS = "'Press Start 2P', monospace", FONT_VT = "'VT323', monospace";
+function fontStr(f, size) { return size + 'px ' + (f === 'vt' ? FONT_VT : FONT_PS); }
+function txt(str, x, y, o) {
+  o = o || {};
+  TQ.push({ str: String(str), x, y, f: o.f || 'ps', size: o.size || 8, color: o.color || '#f4f4f4',
+            align: o.align || 'left', shadow: o.shadow === undefined ? '#1a1c2c' : o.shadow, alpha: o.alpha });
+}
+function measure(str, f, size) { D.font = fontStr(f, size); return D.measureText(str).width; }
+function wrap(str, f, size, maxW) {
+  const words = String(str).split(' '), lines = []; let cur = '';
+  words.forEach(w => {
+    const t = cur ? cur + ' ' + w : w;
+    if (measure(t, f, size) > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+function fitSize(str, f, size, maxW, min) { while (size > (min || 4) && measure(str, f, size) > maxW) size -= 0.5; return size; }
+function flushLayer() {
+  D.setTransform(1, 0, 0, 1, 0, 0);
+  D.imageSmoothingEnabled = false;
+  D.drawImage(PB, 0, 0, VW * S, VH * S);
+  D.setTransform(S, 0, 0, S, 0, 0);
+  D.textBaseline = 'top';
+  TQ.forEach(t => {
+    D.font = fontStr(t.f, t.size);
+    D.textAlign = t.align;
+    D.globalAlpha = t.alpha === undefined ? 1 : t.alpha;
+    const sh = t.f === 'vt' ? 0.5 : Math.max(0.5, t.size / 8);
+    if (t.shadow) { D.fillStyle = t.shadow; D.fillText(t.str, t.x + sh, t.y + sh); }
+    D.fillStyle = t.color; D.fillText(t.str, t.x, t.y);
+  });
+  D.globalAlpha = 1;
+  TQ = [];
+  P.clearRect(0, 0, VW, VH);
+}
+
+/* ---------- pixel helpers (draw on the 320x200 buffer) ---------- */
+function col(c) { return PAL[c] || c; }
+function rect(x, y, w, h, c, g) { g = g || G; g.fillStyle = col(c); g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+function px(x, y, c, g) { rect(x, y, 1, 1, c, g); }
+function hline(x, y, w, c, g) { rect(x, y, w, 1, c, g); }
+function vline(x, y, h, c, g) { rect(x, y, 1, h, c, g); }
+function frame(x, y, w, h, c, g) { hline(x, y, w, c, g); hline(x, y + h - 1, w, c, g); vline(x, y, h, c, g); vline(x + w - 1, y, h, c, g); }
+function dither(x, y, w, h, c, g, phase) {
+  g = g || G; g.fillStyle = col(c);
+  for (let yy = 0; yy < h; yy++) for (let xx = (yy + (phase || 0)) & 1; xx < w; xx += 2) g.fillRect(x + xx, y + yy, 1, 1);
+}
+/* HUD-style box: dark with a white border and a hard shadow */
+function box(x, y, w, h, fill, border) {
+  rect(x + 2, y + 2, w, h, '#000000');
+  rect(x, y, w, h, border || 'm');
+  rect(x + 1, y + 1, w - 2, h - 2, fill || 'a');
+}
+/* chunky 8-bit button, returns true when clicked */
+function button(x, y, w, h, label, o) {
+  o = o || {};
+  const face = o.face || 'j', hot = hitHover(x, y, w, h) && !o.disabled, down = hot && input.down && !input.drag;
+  const oy = down ? 1 : 0;
+  rect(x + 1, y + 2, w, h, '#000000');
+  rect(x, y + oy, w, h, 'a');
+  rect(x + 1, y + 1 + oy, w - 2, h - 2, o.disabled ? 'o' : (hot ? SHADE_UP[face] || face : face));
+  hline(x + 2, y + 1 + oy, w - 4, 'm');
+  hline(x + 1, y + h - 2 + oy, w - 2, SHADE[face] || 'a');
+  if (o.icon) { const c = spr(o.icon); P.drawImage(c, Math.round(x + (o.label === false ? (w - c.width) / 2 : 5)), Math.round(y + (h - c.height) / 2 + oy)); }
+  if (label) {
+    const f = o.f || 'ps';
+    let size = o.size || (f === 'vt' ? 10 : 7);
+    const avail = w - 6 - (o.icon ? 12 : 0);
+    size = fitSize(label, f, size, avail, 4);
+    const ty = y + oy + (h - size) / 2 + (f === 'vt' ? -size * 0.1 : 0.5);
+    const tx = o.align === 'left' ? x + 5 + (o.icon ? 12 : 0) : x + w / 2 + (o.icon ? 6 : 0);
+    txt(label, tx, ty, { f, size, align: o.align === 'left' ? 'left' : 'center', color: o.textColor || '#f4f4f4' });
+  }
+  if (o.disabled) return false;
+  if (hot && input.mouse) input.cursor = 'pointer';
+  return clickIn(x, y, w, h);
+}
+const SHADE_UP = { a:'p', b:'c', c:'d', d:'e', e:'m', f:'m', g:'f', h:'g', i:'j', j:'k', k:'l', l:'m', m:'m', n:'m', o:'n', p:'o', q:'r', r:'d' };
+
+/* ---------- input ---------- */
+const input = { x: -99, y: -99, down: false, drag: false, sx: 0, sy: 0, mouse: true, click: null, cursor: 'default',
+                keys: {}, pressed: {}, wheel: 0, lastMove: 0 };
+function toGame(e) {
+  const r = screenCv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * VW, y: (e.clientY - r.top) / r.height * VH };
+}
+screenCv.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  audioUnlock();
+  try { screenCv.setPointerCapture(e.pointerId); } catch (err) {}
+  const p = toGame(e);
+  input.mouse = e.pointerType === 'mouse';
+  input.x = p.x; input.y = p.y; input.sx = p.x; input.sy = p.y; input.down = true; input.drag = false;
+  input.px = p.x; input.py = p.y; input.dx = 0; input.dy = 0;
+});
+screenCv.addEventListener('pointermove', e => {
+  const p = toGame(e);
+  input.mouse = e.pointerType === 'mouse';
+  input.x = p.x; input.y = p.y; input.lastMove = performance.now();
+  if (input.down) {
+    if (Math.abs(p.x - input.sx) + Math.abs(p.y - input.sy) > 5) input.drag = true;
+    input.dx += p.x - input.px; input.dy += p.y - input.py;
+    input.px = p.x; input.py = p.y;
+  }
+});
+function endPointer(e, cancel) {
+  const p = toGame(e);
+  if (input.down && !input.drag && !cancel) input.click = { x: p.x, y: p.y, used: false, touch: !input.mouse };
+  input.down = false; input.drag = false;
+  if (!input.mouse) { input.x = -99; input.y = -99; input.tapX = p.x; input.tapY = p.y; }
+}
+screenCv.addEventListener('pointerup', e => endPointer(e, false));
+screenCv.addEventListener('pointercancel', e => endPointer(e, true));
+screenCv.addEventListener('pointerleave', e => { if (input.mouse && !input.down) { input.x = -99; input.y = -99; } });
+screenCv.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('keydown', e => {
+  audioUnlock();
+  const k = e.key;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].indexOf(k) >= 0) e.preventDefault();
+  if (!input.keys[k]) input.pressed[k] = true;
+  input.keys[k] = true;
+});
+window.addEventListener('keyup', e => { input.keys[e.key] = false; });
+function hitHover(x, y, w, h) {
+  if (input.mouse || input.down) return input.x >= x && input.x < x + w && input.y >= y && input.y < y + h;
+  return false;
+}
+function clickIn(x, y, w, h) {
+  const c = input.click;
+  if (!c || c.used) return false;
+  if (c.x >= x && c.x < x + w && c.y >= y && c.y < y + h) { c.used = true; return true; }
+  return false;
+}
+function anyClick() { const c = input.click; if (c && !c.used) { c.used = true; return true; } return false; }
+function keyHit(...ks) { for (const k of ks) if (input.pressed[k]) { input.pressed[k] = false; return true; } return false; }
+
+/* ---------- save data (localStorage in try/catch) ---------- */
+const SAVE_KEY = 'jobcity_save_v1';
+function freshSave() { return { jobs: {}, coins: 0, settings: { sound: true, music: true, voice: true, labels: true } }; }
+let save = freshSave();
+try {
+  const raw = window.localStorage.getItem(SAVE_KEY);
+  if (raw) { const s = JSON.parse(raw); if (s && s.jobs) { save = Object.assign(freshSave(), s); save.settings = Object.assign(freshSave().settings, s.settings || {}); } }
+} catch (err) { /* storage blocked: play without saving */ }
+function persist() { try { window.localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (err) {} }
+function jobsDone() { return JOBS.filter(j => save.jobs[j.id]).length; }
+function placeDone(p) { return p.jobs.length > 0 && p.jobs.every(id => save.jobs[id]); }
+
+/* ---------- chiptune audio (Web Audio API, no files) ---------- */
+let AC = null, master = null, musicGain = null;
+function audioUnlock() {
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  try {
+    const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    AC = new A();
+    master = AC.createGain(); master.gain.value = 0.35; master.connect(AC.destination);
+    musicGain = AC.createGain(); musicGain.gain.value = 0.16; musicGain.connect(master);
+  } catch (err) { AC = null; }
+}
+function tone(freq, dur, type, vol, delay, slide, dest) {
+  if (!AC || !save.settings.sound && dest !== musicGain) return;
+  const t0 = AC.currentTime + (delay || 0);
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'square';
+  o.frequency.setValueAtTime(freq, t0);
+  if (slide) o.frequency.exponentialRampToValueAtTime(slide, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(vol || 0.3, t0 + 0.01);
+  g.gain.setValueAtTime(vol || 0.3, t0 + dur * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(dest || master);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noise(dur, vol, delay) {
+  if (!AC || !save.settings.sound) return;
+  const t0 = AC.currentTime + (delay || 0), n = Math.floor(AC.sampleRate * dur);
+  const buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const s = AC.createBufferSource(), g = AC.createGain(); g.gain.value = vol || 0.2;
+  s.buffer = buf; s.connect(g); g.connect(master); s.start(t0);
+}
+const sfx = {
+  click()   { tone(880, 0.05, 'square', 0.18); tone(1320, 0.04, 'square', 0.12, 0.04); },
+  hover()   { tone(660, 0.03, 'square', 0.06); },
+  select()  { tone(523, 0.06, 'square', 0.2); tone(784, 0.08, 'square', 0.2, 0.06); },
+  enter()   { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.07, 'square', 0.18, i * 0.05)); },
+  blip()    { tone(1200 + Math.random() * 200, 0.02, 'square', 0.04); },
+  correct() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.09, 'square', 0.22, i * 0.07)); },
+  wrong()   { tone(220, 0.18, 'sawtooth', 0.2, 0, 110); tone(160, 0.22, 'square', 0.15, 0.12, 90); },
+  coin()    { tone(988, 0.06, 'square', 0.2, 0.3); tone(1319, 0.2, 'square', 0.2, 0.36); },
+  fanfare() {
+    const n = [[523,.12],[523,.12],[523,.12],[523,.3],[415,.3],[466,.3],[523,.18],[466,.08],[523,.6]];
+    let t = 0; n.forEach(([f, d]) => { tone(f, d * 0.95, 'square', 0.2, t); tone(f / 2, d * 0.95, 'triangle', 0.25, t); t += d; });
+    [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.1, 'square', 0.1, t + i * 0.06));
+  },
+  whoosh()  { noise(0.25, 0.12); },
+};
+/* ---------- background tune: a tiny looping 8-bit melody ---------- */
+const MELODY = [ // [midi note or 0, length in 8ths]
+  [72,1],[76,1],[79,2],[76,1],[79,1],[81,2],[79,1],[76,1],[72,2],[74,1],[76,1],[74,2],
+  [72,1],[76,1],[79,2],[84,2],[83,1],[81,1],[79,2],[77,1],[76,1],[74,1],[72,1],[72,2],[0,2]];
+const BASS = [48,48,55,55,53,53,55,55,48,48,55,55,53,55,48,48];
+let musicOn = false, musicTimer = null, musicStep = 0, musicTime = 0, bassStep = 0, bassTime = 0;
+const EIGHTH = 0.2;
+function midi(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+function musicTick() {
+  if (!AC || !musicOn) return;
+  const now = AC.currentTime;
+  if (musicTime < now) musicTime = now + 0.05;
+  if (bassTime < now) bassTime = now + 0.05;
+  while (musicTime < now + 0.4) {
+    const [n, l] = MELODY[musicStep % MELODY.length];
+    if (n) tone(midi(n), l * EIGHTH * 0.85, 'square', 0.22, musicTime - now, null, musicGain);
+    musicTime += l * EIGHTH; musicStep++;
+  }
+  while (bassTime < now + 0.4) {
+    tone(midi(BASS[bassStep % BASS.length]), EIGHTH * 1.7, 'triangle', 0.5, bassTime - now, null, musicGain);
+    bassTime += EIGHTH * 2; bassStep++;
+  }
+}
+function updateMusic() {
+  const want = !!(AC && save.settings.music && save.settings.sound);
+  if (want && !musicOn) { musicOn = true; musicTime = bassTime = 0; musicTimer = setInterval(musicTick, 100); }
+  if (!want && musicOn) { musicOn = false; clearInterval(musicTimer); }
+}
+
+/* ---------- speech (reads sentences aloud) ---------- */
+let voicePick = null;
+function pickVoice() {
+  try {
+    const vs = window.speechSynthesis.getVoices();
+    voicePick = vs.find(v => /en[-_]GB/i.test(v.lang)) || vs.find(v => /en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+  } catch (err) { voicePick = null; }
+}
+if ('speechSynthesis' in window) { pickVoice(); window.speechSynthesis.onvoiceschanged = pickVoice; }
+function speak(text) {
+  if (!save.settings.voice || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text.replace(/_+/g, 'blank'));
+    u.lang = voicePick ? voicePick.lang : 'en-GB';
+    if (voicePick) u.voice = voicePick;
+    u.rate = 0.9; u.pitch = 1.05;
+    window.speechSynthesis.speak(u);
+  } catch (err) {}
+}
+
+/* ---------- small utilities ---------- */
+function rnd(n) { return Math.floor(Math.random() * n); }
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function art(w) { return /^[aeiou]/i.test(w) ? 'an' : 'a'; }
+function blinkOn(t, period) { return Math.floor(t / (period || 500)) % 2 === 0; }
+const floaters = [];   // "+10 coins" etc. (screen coordinates)
+function addFloater(text, x, y, color) { floaters.push({ text, x, y, t: 0, color: color || '#ffcd75' }); }
+function drawFloaters(dt) {
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i]; f.t += dt;
+    const y = Math.round(f.y - f.t / 40);
+    txt(f.text, f.x, y, { size: 7, color: f.color, align: 'center', alpha: Math.max(0, 1 - f.t / 1400) });
+    if (f.t > 1400) floaters.splice(i, 1);
+  }
+}
+
+/* =====================================================================
+   CITY WORLD: ground, roads, decoration, traffic, minimap
+   ===================================================================== */
+const EXT_W = WORLD_W + 40, EXT_H = WORLD_H + 30;
+const HROADS = [146, 292];            // y of horizontal roads (14 px wide)
+const VROADS = [168, 300, 432, 564];  // x of vertical roads
+const RW = 14;
+function seeded(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function isWater(x, y) { return x >= 721 || (x >= 690 && y >= 300) || (x >= 598 && y >= 398) || (x >= 582 && y >= 441); }
+function onRoad(x, y, m) {
+  m = m || 0;
+  for (const ry of HROADS) if (y >= ry - 3 - m && y < ry + RW + 3 + m) return true;
+  for (const rx of VROADS) if (x >= rx - 3 - m && x < rx + RW + 3 + m) return true;
+  return false;
+}
+function inLot(x, y, m) {
+  m = m || 0;
+  for (const p of PLACES) if (x >= p.x - m && x < p.x + p.w + m && y >= p.y - m - 6 && y < p.y + p.h + m) return true;
+  return false;
+}
+let worldCv = null, miniCv = null;
+const DECOR = [];   // static props sorted into the world picture
+function buildWorld() {
+  worldCv = newCanvas(EXT_W, EXT_H);
+  const g = worldCv.getContext('2d'), R = seeded(1234);
+  // grass
+  rect(0, 0, EXT_W, EXT_H, 'g', g);
+  for (let i = 0; i < 2600; i++) {
+    const x = Math.floor(R() * EXT_W), y = Math.floor(R() * EXT_H), c = R() < 0.55 ? 'f' : 'h';
+    if (c === 'f') { px(x, y, 'f', g); if (R() < 0.5) px(x + 1, y - 1, 'f', g); }
+    else { px(x, y, 'h', g); px(x + 1, y, 'h', g); }
+  }
+  // countryside: lighter meadow tone with dithered edge
+  dither(0, 0, 166, EXT_H, 'f', g);
+  rect(0, 0, 166, EXT_H, 'rgba(56,183,100,0.55)', g);
+  // downtown paving on block edges (small plazas in front of buildings)
+  // water & shore
+  for (let y = 0; y < EXT_H; y += 1) for (let x = 560; x < EXT_W; x += 1) {
+    if (isWater(x, y)) {
+      const edge = !isWater(x - 1, y) || !isWater(x, y - 1);
+      px(x, y, edge ? 'n' : ((x + y * 3) % 23 === 0 ? 'j' : 'i'), g);
+      if (!isWater(x - 2, y) || !isWater(x, y - 2)) if (!edge) px(x, y, 'j', g);
+    } else if (isWater(x + 1, y) || isWater(x, y + 1) || isWater(x + 2, y) || isWater(x, y + 2)) {
+      px(x, y, x > 700 && y < 300 ? 'e' : 'o', g);
+    }
+  }
+  // sand beach strip along the east coast
+  rect(712, 0, 9, 300, 'e', g); dither(712, 0, 3, 300, 'g', g); for (let y = 2; y < 298; y += 7) px(716 + (y % 3), y, 'd', g);
+  // sidewalks
+  HROADS.forEach(ry => { rect(0, ry - 4, EXT_W, RW + 8, 'n', g); hline(0, ry - 4, EXT_W, 'o', g); hline(0, ry + RW + 3, EXT_W, 'o', g); });
+  VROADS.forEach(rx => { rect(rx - 4, 0, RW + 8, EXT_H, 'n', g); vline(rx - 4, 0, EXT_H, 'o', g); vline(rx + RW + 3, 0, EXT_H, 'o', g); });
+  // sidewalk tile seams
+  HROADS.forEach(ry => { for (let x = 0; x < EXT_W; x += 6) { px(x, ry - 3, 'm', g); px(x + 3, ry + RW + 1, 'm', g); } });
+  VROADS.forEach(rx => { for (let y = 0; y < EXT_H; y += 6) { px(rx - 3, y, 'm', g); px(rx + RW + 1, y + 3, 'm', g); } });
+  // asphalt
+  HROADS.forEach(ry => rect(0, ry, EXT_W, RW, 'p', g));
+  VROADS.forEach(rx => rect(rx, 0, RW, EXT_H, 'p', g));
+  // gravel texture on the asphalt
+  for (let i = 0; i < 900; i++) { const x = Math.floor(R() * EXT_W), y = Math.floor(R() * EXT_H); if (onRoad(x, y, -3) && !isWater(x, y)) px(x, y, 'a', g); }
+  // dashed centre lines (skip intersections)
+  HROADS.forEach(ry => { for (let x = 0; x < EXT_W; x += 8) { if (!VROADS.some(rx => x + 4 > rx - 6 && x < rx + RW + 6)) rect(x, ry + 6, 4, 1, 'e', g); } });
+  VROADS.forEach(rx => { for (let y = 0; y < EXT_H; y += 8) { if (!HROADS.some(ry => y + 4 > ry - 6 && y < ry + RW + 6)) rect(rx + 6, y, 1, 4, 'e', g); } });
+  // crosswalks at intersections
+  HROADS.forEach(ry => VROADS.forEach(rx => {
+    for (let k = 0; k < RW; k += 3) { rect(rx - 7, ry + k + 1, 3, 2, 'm', g); rect(rx + RW + 4, ry + k + 1, 3, 2, 'm', g); }
+    for (let k = 0; k < RW; k += 3) { rect(rx + k + 1, ry - 7, 2, 3, 'm', g); rect(rx + k + 1, ry + RW + 4, 2, 3, 'm', g); }
+    rect(rx, ry, RW, RW, 'p', g);
+  }));
+  // road ends into the sea: a small quay wall
+  rect(720, 144, 3, 18, 'o', g); rect(720, 290, 3, 18, 'o', g);
+  // countryside dirt path to the farm and zoo gates
+  rect(82, 140, 6, 6, 'r', g); rect(82, 160, 6, 8, 'r', g); rect(82, 306, 6, 6, 'r', g);
+  // flowers
+  for (let i = 0; i < 500; i++) {
+    const x = Math.floor(R() * WORLD_W), y = Math.floor(R() * WORLD_H);
+    if (onRoad(x, y, 2) || inLot(x, y, 2) || isWater(x, y) || isWater(x + 3, y + 3)) continue;
+    const c = ['c', 'e', 'm', 'k', 'd'][Math.floor(R() * 5)];
+    px(x, y, c, g); px(x, y + 1, 'h', g);
+    if (R() < 0.4) { px(x + 2, y + 1, c, g); px(x + 2, y + 2, 'h', g); }
+  }
+  // trees, bushes, benches, lamps
+  const spots = [];
+  for (let i = 0; i < 700 && spots.length < 95; i++) {
+    const x = Math.floor(R() * (WORLD_W - 12)), y = Math.floor(R() * (WORLD_H - 4)) + 12;
+    if (isWater(x + 6, y) || isWater(x + 12, y + 2)) continue;
+    let bad = false;
+    for (let dx = -2; dx <= 14 && !bad; dx += 4) for (let dy = -12; dy <= 2 && !bad; dy += 4) if (onRoad(x + dx, y + dy) || inLot(x + dx, y + dy, 2)) bad = true;
+    if (bad || spots.some(s => Math.abs(s.x - x) < 12 && Math.abs(s.y - y) < 10)) continue;
+    const kind = x < 166 ? (R() < 0.6 ? 'pine' : 'tree') : (R() < 0.55 ? 'tree' : (R() < 0.6 ? 'bush' : 'pine'));
+    spots.push({ x, y, kind });
+  }
+  // lamp posts & benches along sidewalks
+  for (let x = 20; x < 700; x += 44) {
+    [HROADS[0] + RW + 5, HROADS[1] + RW + 5].forEach(yy => {
+      if (VROADS.some(rx => x > rx - 10 && x < rx + RW + 8)) return;
+      spots.push({ x, y: yy + 1, kind: 'lamp' });
+    });
+  }
+  spots.sort((a, b) => a.y - b.y).forEach(s => {
+    const c = spr(s.kind);
+    g.drawImage(c, s.x, s.y - c.height);
+  });
+  // benches beside a few sidewalks
+  [[200, 170], [352, 170], [470, 170], [60, 316], [610, 170], [360, 318]].forEach(([x, y]) => { if (!inLot(x, y, 1)) g.drawImage(spr('bench'), x, y); });
+  buildMini();
+}
+function buildMini() {
+  miniCv = newCanvas(Math.ceil(EXT_W / 10), Math.ceil(EXT_H / 10));
+  const g = miniCv.getContext('2d');
+  const src = newCanvas(EXT_W, EXT_H), sg = src.getContext('2d');
+  sg.drawImage(worldCv, 0, 0);
+  const tone = { hospital:'m', pharmacy:'g', dentist:'m', school:'e', tv:'n', lab:'l', police:'i', fire:'c', library:'n', bank:'m',
+    theatre:'c', hotel:'b', salon:'m', supermarket:'g', bakery:'s', restaurant:'c', post:'j', park:'f', pool:'k', farm:'r',
+    zoo:'e', vet:'s', garage:'o', recycling:'g', airport:'o', bus:'e', construction:'d', harbour:'r' };
+  PLACES.forEach(p => rect(p.x + 3, p.y + 6, p.w - 6, p.h - 10, tone[p.id] || 'n', sg));
+  g.imageSmoothingEnabled = true;
+  g.drawImage(src, 0, 0, miniCv.width, miniCv.height);
+}
+
+/* ---------- traffic and walkers ---------- */
+const CAR_COLORS = ['c', 'j', 'e', 'g', 'b', 'd', 'k', 'm'];
+const traffic = [], walkers = [];
+function initTraffic() {
+  const R = seeded(99);
+  HROADS.forEach((ry, i) => {
+    for (let k = 0; k < 4; k++) traffic.push({ kind: 'car', dir: 1, y: ry + 4, x: R() * EXT_W, v: 16 + R() * 10, c: CAR_COLORS[Math.floor(R() * 8)] });
+    for (let k = 0; k < 3; k++) traffic.push({ kind: 'car', dir: -1, y: ry - 3, x: R() * EXT_W, v: 14 + R() * 10, c: CAR_COLORS[Math.floor(R() * 8)] });
+  });
+  traffic.push({ kind: 'bus', dir: 1, y: HROADS[0] + 3, x: 100, v: 12 });
+  traffic.push({ kind: 'taxi', dir: -1, y: HROADS[1] - 4, x: 400, v: 20 });
+  traffic.push({ kind: 'mailvan', dir: 1, y: HROADS[1] + 4, x: 250, v: 15 });
+  VROADS.forEach((rx, i) => {
+    for (let k = 0; k < 2; k++) traffic.push({ kind: 'carV', dir: i % 2 ? -1 : 1, x: rx + 2, y: R() * EXT_H, v: 14 + R() * 8, c: CAR_COLORS[Math.floor(R() * 8)] });
+  });
+  const hair = ['a', 'q', 'e', 'd', 'r', 'o'], shirts = ['c', 'j', 'g', 'e', 'b', 'd', 'k', 'm', 'h'], skins = ['s', 'r', 'q'];
+  for (let k = 0; k < 16; k++) {
+    const horiz = k % 2 === 0;
+    const w = { horiz, dir: R() < 0.5 ? -1 : 1, v: 5 + R() * 4, subs: { H: hair[Math.floor(R() * 6)], K: skins[Math.floor(R() * 3)], S: shirts[Math.floor(R() * 9)], T: ['i', 'p', 'q', 'o'][Math.floor(R() * 4)], O: 'a' } };
+    if (horiz) { const ry = HROADS[Math.floor(R() * 2)]; w.y = R() < 0.5 ? ry - 2 : ry + RW + 3; w.x = R() * WORLD_W; }
+    else { const rx = VROADS[Math.floor(R() * 4)]; w.x = R() < 0.5 ? rx - 4 : rx + RW + 1; w.y = R() * WORLD_H; }
+    walkers.push(w);
+  }
+}
+function updateTraffic(dt) {
+  traffic.forEach(c => {
+    if (c.kind === 'carV') { c.y += c.dir * c.v * dt / 1000; if (c.y > EXT_H + 12) c.y = -12; if (c.y < -12) c.y = EXT_H + 12; }
+    else { c.x += c.dir * c.v * dt / 1000; if (c.x > EXT_W + 24) c.x = -24; if (c.x < -24) c.x = EXT_W + 24; }
+  });
+  walkers.forEach(w => {
+    if (w.horiz) { w.x += w.dir * w.v * dt / 1000; if (w.x > WORLD_W) w.dir = -1; if (w.x < 0) w.dir = 1; }
+    else { w.y += w.dir * w.v * dt / 1000; if (w.y > WORLD_H) w.dir = -1; if (w.y < 10) w.dir = 1; }
+  });
+}
+function drawTraffic(cx, cy, t) {
+  traffic.forEach(c => {
+    const x = Math.round(c.x) - cx, y = Math.round(c.y) - cy;
+    if (x < -30 || x > VW + 30 || y < -30 || y > VH + 30) return;
+    if (c.kind === 'carV') { const s = spr('carV', { X: c.c }); P.save(); if (c.dir < 0) { P.translate(x, y + s.height); P.scale(1, -1); P.drawImage(s, 0, 0); } else P.drawImage(s, x, y - 6); P.restore(); return; }
+    const name = c.kind === 'car' ? 'car' : c.kind;
+    const s = spr(name, c.kind === 'car' ? { X: c.c } : null, c.dir < 0);
+    const bob = (c.kind === 'bus' && Math.floor(t / 300) % 2) ? 1 : 0;
+    P.drawImage(s, x - (s.width >> 1), y - s.height + 3 - bob);
+  });
+}
+function drawWalkers(cx, cy, t) {
+  walkers.forEach((w, i) => {
+    const x = Math.round(w.x) - cx, y = Math.round(w.y) - cy;
+    if (x < -10 || x > VW + 10 || y < -14 || y > VH + 14) return;
+    const f = Math.floor((t + i * 130) / 220) % 2;
+    const s = spr(f ? 'ped1' : 'ped0', w.subs, w.horiz && w.dir < 0);
+    P.drawImage(s, x - 3, y - s.height);
+  });
+}
+/* water glints (whole-pixel motion) */
+function drawWater(cx, cy, t) {
+  const ph = Math.floor(t / 400);
+  for (let wy = Math.floor(cy / 6) * 6; wy < cy + VH; wy += 6) {
+    for (let wx = Math.floor(cx / 10) * 10; wx < cx + VW; wx += 10) {
+      const k = ((wx * 7 + wy * 13) >> 2) % 5;
+      const ox = (k * 3 + ph + (wy >> 1)) % 10;
+      if (!isWater(wx + ox, wy) || !isWater(wx + ox + 3, wy) || !isWater(wx + ox, wy - 2)) continue;
+      if ((k + ph) % 3 === 0) continue;
+      rect(wx + ox - cx, wy - cy, 3, 1, k % 2 ? 'k' : 'j');
+      if (k === 1) px(wx + ox + 1 - cx, wy - 1 - cy, 'l');
+    }
+  }
+}
+
+/* =====================================================================
+   BUILDINGS (part 1). Each draws itself at lot position (x, y) at time t
+   onto the current target G. Every place has its own silhouette, sign,
+   idle animation and outdoor props.
+   ===================================================================== */
+let G = P;
+function R(x, y, w, h, c) { G.fillStyle = col(c); G.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+function X(x, y, c) { R(x, y, 1, 1, c); }
+function O(x, y, w, h, c) { R(x, y, w, h, 'a'); R(x + 1, y + 1, w - 2, h - 2, c); }
+function SP(name, x, y, subs, flip) { const c = spr(name, subs, flip); if (c) G.drawImage(c, Math.round(x), Math.round(y)); return c; }
+function bricks(x, y, w, h, base, mortar) {
+  R(x, y, w, h, base);
+  for (let yy = 2, row = 0; yy < h; yy += 3, row++) {
+    R(x, y + yy, w, 1, mortar);
+    for (let xx = (row % 2) ? 2 : 4; xx < w; xx += 5) R(x + xx, y + yy - 2, 1, 2, mortar);
+  }
+}
+function win(x, y, w, h, fr, gl) { R(x, y, w, h, fr || 'a'); R(x + 1, y + 1, w - 2, h - 2, gl || 'k'); X(x + 1, y + 1, 'l'); if (h > 5) X(x + 2, y + 2, 'l'); }
+function pave(x, y, w, h) { R(x, y, w, h, 'n'); for (let i = 0; i < w; i += 5) X(x + i, y + ((i / 5) % 2 ? 1 : h - 2), 'o'); R(x, y, w, 1, 'o'); }
+function flatRoof(x, y, w, top, eave) { R(x - 1, y, w + 2, 6, 'a'); R(x, y + 1, w, 3, top); R(x - 1, y + 4, w + 2, 2, eave || 'p'); }
+function pitchRoof(x, y, w, h, c, line) {
+  for (let i = 0; i < h; i++) {
+    const inset = Math.max(0, Math.floor((h - 1 - i) * 0.6));
+    R(x + inset - 1, y + i, w - inset * 2 + 2, 1, 'a');
+    R(x + inset, y + i, w - inset * 2, 1, (i % 3 === 2) ? line : c);
+  }
+  R(x - 2, y + h, w + 4, 2, 'a'); R(x - 1, y + h, w + 2, 1, line);
+}
+function stripes(x, y, w, h, c1, c2, step) { for (let i = 0; i < w; i++) R(x + i, y, 1, h, Math.floor(i / (step || 3)) % 2 ? c2 : c1); }
+function awning(x, y, w, c1, c2) {
+  R(x - 1, y - 1, w + 2, 6, 'a');
+  stripes(x, y, w, 4, c1, c2, 3);
+  for (let i = 0; i < w; i += 3) X(x + i + 1, y + 4, Math.floor(i / 3) % 2 ? c2 : c1);
+}
+/* 3x5 micro pixel font for signs */
+const MICRO = {
+  A:['.#.','#.#','###','#.#','#.#'], B:['##.','#.#','##.','#.#','##.'], C:['.##','#..','#..','#..','.##'], D:['##.','#.#','#.#','#.#','##.'],
+  E:['###','#..','##.','#..','###'], F:['###','#..','##.','#..','#..'], G:['.##','#..','#.#','#.#','.##'], H:['#.#','#.#','###','#.#','#.#'],
+  I:['###','.#.','.#.','.#.','###'], K:['#.#','#.#','##.','#.#','#.#'], L:['#..','#..','#..','#..','###'], M:['#...#','##.##','#.#.#','#...#','#...#'],
+  N:['#..#','##.#','#.##','#..#','#..#'], O:['.#.','#.#','#.#','#.#','.#.'], P:['##.','#.#','##.','#..','#..'], R:['##.','#.#','##.','#.#','#.#'],
+  S:['.##','#..','.#.','..#','##.'], T:['###','.#.','.#.','.#.','.#.'], U:['#.#','#.#','#.#','#.#','###'], V:['#.#','#.#','#.#','#.#','.#.'],
+  W:['#...#','#...#','#.#.#','##.##','#...#'], X:['#.#','#.#','.#.','#.#','#.#'], Y:['#.#','#.#','.#.','.#.','.#.'], Z:['###','..#','.#.','#..','###'],
+  ' ':['..','..','..','..','..'], '1':['.#','##','.#','.#','.#'], '2':['##.','..#','.#.','#..','###'], '3':['##.','..#','.#.','..#','##.'],
+  '0':['###','#.#','#.#','#.#','###'], '5':['###','#..','##.','..#','##.'], '7':['###','..#','.#.','.#.','.#.'], '8':['###','#.#','###','#.#','###'], ':':['.','#','.','#','.'],
+};
+function microW(str) { let w = 0; for (const ch of str) w += (MICRO[ch] || MICRO[' '])[0].length + 1; return w - 1; }
+function micro(str, x, y, c) {
+  let cx = Math.round(x);
+  for (const ch of str) { const m = MICRO[ch] || MICRO[' ']; for (let r = 0; r < 5; r++) for (let k = 0; k < m[r].length; k++) if (m[r][k] === '#') X(cx + k, y + r, c); cx += m[0].length + 1; }
+}
+function microV(str, x, y, c) { let yy = y; for (const ch of str) { const m = MICRO[ch]; micro(ch, x + Math.floor((3 - m[0].length) / 2), yy, c); yy += 6; } }
+function flag(x, y, t, c1, c2) {
+  R(x, y, 1, 14, 'n'); X(x, y - 1, 'e');
+  const f = Math.floor(t / 180);
+  for (let i = 0; i < 7; i++) { const dy = ((i + f) % 4 < 2) ? 0 : 1; R(x + 1 + i, y + dy, 1, 5, i < 3 ? c1 : c2); X(x + 1 + i, y + dy + 2, i < 3 ? c1 : 'm'); }
+}
+function smoke(x, y, t, n) {
+  for (let k = 0; k < (n || 3); k++) {
+    const age = ((t / 90 + k * 8) % 24);
+    const s = age < 10 ? 2 : (age < 18 ? 3 : 2);
+    const dx = Math.round(Math.sin((t / 400) + k) * 1 + age / 6);
+    R(x + dx, y - Math.floor(age), s, s, age < 16 ? 'm' : 'n');
+  }
+}
+
+const BLD = {};
+
+BLD.hospital = (x, y, t) => {
+  pave(x, y + 86, 56, 14);
+  // roof with helipad
+  R(x + 3, y + 3, 50, 12, 'a'); R(x + 4, y + 4, 48, 8, 'n'); R(x + 3, y + 12, 50, 3, 'o');
+  R(x + 17, y + 5, 22, 6, 'o'); R(x + 19, y + 4, 18, 8, 'o'); R(x + 20, y + 5, 16, 6, 'p');
+  micro('H', x + 27, y + 5, 'm');
+  X(x + 18, y + 5, 'e'); X(x + 37, y + 5, 'e'); if (blinkOn(t, 700)) { X(x + 18, y + 10, 'e'); X(x + 37, y + 10, 'e'); }
+  // tall white block
+  O(x + 4, y + 14, 48, 74, 'm'); R(x + 47, y + 15, 4, 72, 'n');
+  // huge red cross
+  R(x + 25, y + 17, 6, 18, 'c'); R(x + 19, y + 23, 18, 6, 'c'); R(x + 25, y + 34, 6, 1, 'b'); R(x + 31, y + 29, 6, 1, 'b');
+  // windows
+  const wx = [7, 13, 39, 45], hash = (i, j) => (i * 7 + j * 13) % 5 === 0;
+  for (let j = 0; j < 2; j++) for (let i = 0; i < 4; i++) win(x + wx[i], y + 18 + j * 9, 5, 6, 'o', hash(i, j) ? 'e' : 'k');
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) win(x + 7 + i * 7 + (i > 2 ? 1 : 0), y + 38 + j * 8, 5, 6, 'o', hash(i + 3, j) ? 'e' : 'k');
+  // entrance with automatic doors
+  R(x + 15, y + 71, 26, 3, 'c'); R(x + 15, y + 74, 26, 1, 'b');
+  O(x + 19, y + 75, 18, 13, 'l');
+  const open = (Math.floor(t / 1600) % 3 === 0) ? 3 : (Math.floor(t / 1600) % 3 === 1 ? 1 : 0);
+  R(x + 28 - open * 2, y + 76, open * 4, 11, 'p');
+  R(x + 28, y + 76, 1, 11, open ? 'p' : 'k'); X(x + 21, y + 77, 'm');
+  // ambulance with flashing light
+  const ax = x + 38, ay = y + 87;
+  SP('ambulance', ax, ay);
+  const f = Math.floor(t / 220) % 2;
+  X(ax + 8, ay + 1, f ? 'c' : 'l'); X(ax + 9, ay + 1, f ? 'k' : 'c');
+  if (f) { X(ax + 8, ay, 'd'); } else { X(ax + 9, ay, 'l'); }
+};
+
+BLD.pharmacy = (x, y, t) => {
+  pave(x, y + 42, 27, 6);
+  R(x, y + 13, 27, 5, 'a'); R(x + 1, y + 14, 25, 2, 'f'); R(x, y + 16, 27, 2, 'h');
+  O(x + 1, y + 17, 25, 26, 'm'); R(x + 2, y + 18, 23, 2, 'g'); R(x + 21, y + 20, 4, 22, 'n');
+  // blinking green cross sign on the roof
+  R(x + 13, y + 11, 1, 3, 'a');
+  O(x + 7, y + 0, 13, 12, 'a'); R(x + 8, y + 1, 11, 10, 'p');
+  SP('i_gcross', x + 10, y + 3, blinkOn(t, 450) ? null : { f: 'h' });
+  if (blinkOn(t, 450)) { X(x + 6, y + 5, 'f'); X(x + 20, y + 5, 'f'); }
+  // window with medicine bottles
+  O(x + 3, y + 22, 13, 13, 'l'); R(x + 4, y + 28, 11, 1, 'q'); R(x + 4, y + 33, 11, 1, 'q');
+  const bc = ['c', 'j', 'e', 'b', 'g'];
+  for (let i = 0; i < 5; i++) { R(x + 4 + i * 2, y + 25 - (i % 2), 1, 3 + (i % 2), bc[i]); R(x + 4 + i * 2, y + 30 - ((i + 1) % 2), 1, 3 + ((i + 1) % 2), bc[(i + 2) % 5]); }
+  X(x + 5, y + 24, 'm');
+  O(x + 17, y + 25, 7, 18, 'g'); R(x + 18, y + 26, 5, 7, 'l'); X(x + 22, y + 35, 'e');
+};
+
+BLD.dentist = (x, y, t) => {
+  pave(x, y + 41, 25, 5);
+  R(x, y + 15, 25, 5, 'a'); R(x + 1, y + 16, 23, 2, 'l'); R(x, y + 18, 25, 2, 'k');
+  O(x + 1, y + 19, 23, 23, 'm'); R(x + 2, y + 20, 21, 1, 'l'); R(x + 19, y + 21, 4, 20, 'n');
+  // giant smiling tooth sign (winks now and then)
+  R(x + 12, y + 13, 1, 3, 'a');
+  const bob = Math.floor(t / 600) % 2;
+  const c = SP('i_tooth', x + 7, y + 1 - bob);
+  if (Math.floor(t / 250) % 12 === 0) { X(x + 11, y + 5 - bob, 'm'); X(x + 10, y + 5 - bob, 'n'); }
+  if (blinkOn(t, 900)) { X(x + 19, y + 2, 'm'); X(x + 18, y + 3, 'm'); X(x + 20, y + 3, 'm'); X(x + 19, y + 4, 'm'); }
+  // window: dentist chair
+  O(x + 3, y + 24, 10, 10, 'l'); R(x + 5, y + 30, 6, 2, 'k'); R(x + 5, y + 27, 2, 3, 'k'); X(x + 10, y + 26, 'e');
+  // door with toothbrush-shaped handle
+  O(x + 14, y + 25, 8, 17, 'k'); R(x + 15, y + 26, 6, 6, 'l');
+  R(x + 19, y + 32, 1, 6, 'm'); R(x + 18, y + 31, 3, 2, 'l');
+};
+
+BLD.school = (x, y, t) => {
+  pave(x, y + 72, 64, 10);
+  // bell tower
+  const tx = x + 24;
+  for (let i = 0; i < 8; i++) { R(tx + 7 - i - 1, y - 8 + i, (i + 1) * 2 + 2, 1, 'a'); R(tx + 7 - i, y - 8 + i, (i + 1) * 2, 1, i % 3 === 2 ? 'b' : 'c'); }
+  O(tx + 1, y, 14, 26, 'e'); R(tx + 11, y + 1, 3, 24, 'd');
+  O(tx + 4, y + 1, 8, 7, 'a'); const sw = Math.floor(t / 500) % 2; R(tx + 6 + sw - 0, y + 3, 4, 3, 'd'); X(tx + 7 + sw, y + 6, 'e'); X(tx + 7, y + 2, 'e');
+  O(tx + 4, y + 10, 9, 9, 'm'); R(tx + 8, y + 12, 1, 3, 'a');
+  const hr = Math.floor(t / 3000) % 4; const hx = [0, 1, 0, -1][hr], hy = [-1, 0, 1, 0][hr];
+  X(tx + 8 + hx * 2, y + 14 + hy * 2, 'c'); X(tx + 8 + hx, y + 14 + hy, 'c'); X(tx + 9, y + 14, 'a');
+  // roof
+  R(x + 1, y + 22, 62, 9, 'a'); R(x + 2, y + 23, 60, 4, 'c'); R(x + 2, y + 25, 60, 1, 'b'); R(x + 1, y + 28, 62, 2, 'b');
+  R(tx + 1, y + 20, 14, 8, 'e'); frame(tx + 1, y + 20, 14, 8, 'a'); R(tx + 2, y + 20, 12, 1, 'e');
+  // yellow brick walls
+  frame(x + 2, y + 29, 60, 44, 'a'); bricks(x + 3, y + 30, 58, 42, 'e', 'd');
+  for (let r = 0; r < 2; r++) for (let i = 0; i < 6; i++) {
+    const wx = x + 6 + i * 9 + (i > 2 ? 7 : 0) - (i > 2 ? 3 : 0);
+    if (i === 3 && r === 1) continue;
+    win(wx, y + 34 + r * 17, 7, 9, 'm', 'k'); R(wx + 3, y + 35 + r * 17, 1, 7, 'm'); R(wx + 1, y + 38 + r * 17, 5, 1, 'm');
+  }
+  O(x + 27, y + 55, 10, 18, 'q'); R(x + 32, y + 56, 1, 16, 'a'); X(x + 30, y + 64, 'e'); X(x + 34, y + 64, 'e');
+  R(x + 25, y + 72, 14, 2, 'n');
+  // flagpole with a waving flag
+  flag(x + 64, y + 38, t, 'j', 'e'); R(x + 64, y + 52, 1, 24, 'n'); R(x + 62, y + 75, 5, 2, 'o');
+  // fenced playground: slide and swings
+  const px0 = x + 69;
+  R(px0, y + 40, 40, 26, 'e'); dither(px0, y + 40, 40, 26, 'd', G);
+  for (let i = 0; i < 41; i += 3) { R(px0 + i - 1, y + 37, 1, 5, 'm'); R(px0 + i - 1, y + 63, 1, 5, 'm'); }
+  R(px0 - 1, y + 38, 41, 1, 'm'); R(px0 - 1, y + 64, 41, 1, 'm');
+  // slide
+  R(px0 + 3, y + 44, 1, 14, 'n'); R(px0 + 6, y + 44, 1, 14, 'n'); for (let k = 0; k < 14; k += 3) R(px0 + 3, y + 45 + k, 4, 1, 'n');
+  R(px0 + 3, y + 43, 5, 2, 'j');
+  for (let k = 0; k < 12; k++) R(px0 + 7 + k, y + 44 + k, 2, 2, 'c');
+  // swings
+  R(px0 + 22, y + 43, 16, 1, 'q'); R(px0 + 22, y + 43, 1, 16, 'q'); R(px0 + 37, y + 43, 1, 16, 'q');
+  const s1 = [0, 1, 1, 0, -1, -1][Math.floor(t / 180) % 6], s2 = -s1;
+  [[px0 + 26, s1], [px0 + 32, s2]].forEach(([sx, s]) => { for (let k = 0; k < 9; k++) X(sx + Math.round(s * k / 8), y + 44 + k, 'o'); for (let k = 0; k < 9; k++) X(sx + 2 + Math.round(s * k / 8), y + 44 + k, 'o'); R(sx + s, y + 53, 3, 1, 'c'); });
+  // yellow school bus
+  SP('schoolbus', x + 76, y + 69);
+};
+
+BLD.tv = (x, y, t) => {
+  pave(x, y + 66, 52, 8);
+  // antenna with blinking red light
+  R(x + 40, y - 10, 1, 30, 'o'); for (let k = 0; k < 28; k += 4) { X(x + 39, y - 8 + k, 'o'); X(x + 41, y - 6 + k, 'o'); }
+  R(x + 38, y + 16, 5, 4, 'o');
+  const on = blinkOn(t, 600);
+  X(x + 40, y - 11, on ? 'c' : 'b'); if (on) { X(x + 39, y - 11, 'd'); X(x + 41, y - 11, 'd'); X(x + 40, y - 12, 'd'); }
+  // roof & satellite dish
+  flatRoof(x + 2, y + 19, 48, 'o', 'p');
+  R(x + 11, y + 13, 2, 7, 'o'); R(x + 9, y + 18, 6, 1, 'o');
+  R(x + 6, y + 6, 12, 1, 'a'); R(x + 5, y + 7, 14, 4, 'a'); R(x + 6, y + 11, 12, 1, 'a'); R(x + 8, y + 12, 8, 1, 'a');
+  R(x + 6, y + 7, 12, 1, 'm'); R(x + 6, y + 8, 12, 2, 'n'); R(x + 7, y + 10, 10, 1, 'n'); R(x + 9, y + 11, 6, 1, 'o');
+  R(x + 11, y + 3, 1, 5, 'p'); X(x + 11, y + 2, 'c');
+  // modern grey block with glass bands
+  O(x + 2, y + 24, 48, 43, 'n'); R(x + 44, y + 25, 5, 41, 'o');
+  for (let r = 0; r < 3; r++) { R(x + 3, y + 28 + r * 7, 46, 4, 'p'); for (let k = 0; k < 46; k += 7) { X(x + 4 + k, y + 29 + r * 7, 'o'); X(x + 5 + k, y + 28 + r * 7, 'j'); } }
+  for (let k = 0; k < 48; k += 8) R(x + 2 + k, y + 24, 1, 26, 'o');
+  // ON AIR sign
+  O(x + 12, y + 50, 28, 9, 'a');
+  R(x + 13, y + 51, 26, 7, on ? 'c' : 'b');
+  micro('ON AIR', x + 26 - (microW('ON AIR') >> 1), y + 52, on ? 'e' : 'c');
+  O(x + 20, y + 59, 12, 8, 'l'); R(x + 26, y + 60, 1, 7, 'k');
+};
+
+BLD.lab = (x, y, t) => {
+  pave(x, y + 58, 57, 8);
+  // dome with antenna
+  const cx = x + 22, r = 13;
+  for (let dy = 0; dy <= r; dy++) {
+    const hw = Math.round(Math.sqrt(r * r - (r - dy) * (r - dy)));
+    R(cx - hw - 1, y + 17 + dy, hw * 2 + 3, 1, 'a');
+    R(cx - hw, y + 17 + dy, hw * 2 + 1, 1, dy < 3 ? 'm' : (dy % 4 === 0 ? 'n' : 'm'));
+    X(cx + hw - 1, y + 17 + dy, 'n');
+  }
+  R(cx - 1, y + 18, 3, 12, 'p'); X(cx, y + 20, 'l');
+  R(cx, y + 6, 1, 11, 'o'); X(cx - 1, y + 9, 'o'); X(cx + 1, y + 9, 'o');
+  X(cx, y + 5, blinkOn(t, 400) ? 'l' : 'k');
+  // body
+  O(x + 2, y + 30, 53, 29, 'm'); R(x + 3, y + 33, 51, 1, 'l'); R(x + 50, y + 31, 4, 27, 'n');
+  const ph = Math.floor(t / 500) % 4, gc = ['f', 'g', 'f', 'l'][ph];
+  [5, 12, 19, 33, 40].forEach((wx, i) => { O(x + wx, y + 37, 6, 7, i % 2 ? gc : (ph % 2 ? 'g' : 'f')); X(x + wx + 1, y + 38, 'm'); });
+  O(x + 24, y + 46, 10, 13, 'k'); R(x + 29, y + 47, 1, 12, 'j'); X(x + 26, y + 48, 'l');
+  // bubbling flask sign
+  O(x + 39, y + 14, 15, 15, 'a'); R(x + 40, y + 15, 13, 13, 'p');
+  SP('i_flask', x + 42, y + 16);
+  for (let k = 0; k < 3; k++) { const a = (Math.floor(t / 150) + k * 4) % 12; if (a < 10) X(x + 45 + ((a + k) % 3) - 1, y + 16 - Math.floor(a / 2) + 3, 'f'); }
+  R(x + 46, y + 29, 1, 1, 'a');
+};
+
+BLD.police = (x, y, t) => {
+  pave(x, y + 50, 52, 10);
+  // roof with light bar
+  R(x + 1, y + 6, 50, 6, 'a'); R(x + 2, y + 7, 48, 2, 'j'); R(x + 1, y + 10, 50, 2, 'p');
+  const f = Math.floor(t / 250) % 2;
+  O(x + 20, y + 2, 12, 5, 'n'); R(x + 21, y + 3, 5, 3, f ? 'c' : 'b'); R(x + 26, y + 3, 5, 3, f ? 'i' : 'k');
+  if (f) { X(x + 19, y + 3, 'd'); X(x + 21, y + 1, 'd'); } else { X(x + 32, y + 3, 'l'); X(x + 30, y + 1, 'l'); }
+  // dark blue brick
+  frame(x + 2, y + 11, 48, 40, 'a'); bricks(x + 3, y + 12, 46, 38, 'i', 'p');
+  // POLICE sign
+  O(x + 9, y + 14, 34, 9, 'm'); R(x + 10, y + 15, 32, 7, 'j');
+  micro('POLICE', x + 26 - (microW('POLICE') >> 1), y + 16, 'm');
+  // barred window (left) and window (right)
+  O(x + 5, y + 27, 9, 10, 'p'); for (let k = 0; k < 4; k++) R(x + 6 + k * 2, y + 28, 1, 8, 'n');
+  win(x + 38, y + 27, 9, 10, 'a', 'k'); R(x + 42, y + 28, 1, 8, 'a');
+  // blue lamp above the door
+  R(x + 25, y + 24, 2, 2, 'p'); O(x + 23, y + 25, 6, 5, blinkOn(t, 900) ? 'l' : 'k'); X(x + 24, y + 26, 'm');
+  O(x + 20, y + 32, 12, 19, 'j'); R(x + 26, y + 33, 1, 17, 'i'); X(x + 24, y + 41, 'e'); X(x + 28, y + 41, 'e');
+  R(x + 18, y + 50, 16, 2, 'n');
+  // police car with blinking lights
+  const cx = x + 36, cy = y + 49;
+  SP('police_car', cx, cy);
+  X(cx + 6, cy + 1, f ? 'j' : 'k'); X(cx + 7, cy + 1, f ? 'd' : 'c');
+};
+
+BLD.fire = (x, y, t) => {
+  pave(x, y + 64, 58, 14);
+  // hose-drying tower
+  O(x + 2, y + 0, 13, 66, 'c'); bricks(x + 3, y + 1, 11, 64, 'c', 'b');
+  R(x + 1, y - 2, 15, 3, 'a'); R(x + 2, y - 1, 13, 1, 'b');
+  O(x + 5, y + 5, 7, 8, 'a'); R(x + 6, y + 6, 5, 6, 'p');
+  const sway = Math.floor(t / 700) % 2;
+  R(x + 7 + sway, y + 6, 1, 20, 'n'); R(x + 9 + sway, y + 6, 1, 14, 'e');
+  O(x + 5, y + 20, 7, 7, 'k'); O(x + 5, y + 32, 7, 7, 'k');
+  // main hall
+  R(x + 13, y + 16, 45, 6, 'a'); R(x + 14, y + 17, 43, 2, 'c'); R(x + 13, y + 20, 45, 2, 'b');
+  frame(x + 14, y + 21, 43, 44, 'a'); bricks(x + 15, y + 22, 41, 42, 'c', 'b');
+  // flame sign
+  O(x + 29, y + 22, 13, 13, 'm'); R(x + 30, y + 23, 11, 11, 'a');
+  const fl = Math.floor(t / 200) % 2; SP('i_flame', x + 30 - 0, y + 23 - fl, fl ? null : { e: 'm' });
+  // arched garage doors: left open (fire truck), right closed
+  const arch = (dx) => { O(x + dx, y + 40, 18, 25, 'a'); R(x + dx + 2, y + 38, 14, 3, 'a'); R(x + dx + 1, y + 39, 16, 2, 'a'); };
+  arch(16); arch(37);
+  R(x + 17, y + 41, 16, 23, 'p'); R(x + 19, y + 39, 12, 2, 'p');
+  SP('firetruckFront', x + 18, y + 51);
+  const tf = Math.floor(t / 300) % 2; X(x + 21, y + 52, tf ? 'c' : 'd'); X(x + 28, y + 52, tf ? 'd' : 'c');
+  R(x + 38, y + 41, 16, 23, 'n'); R(x + 40, y + 39, 12, 2, 'n');
+  for (let k = 0; k < 23; k += 3) R(x + 38, y + 42 + k, 16, 1, 'o');
+  R(x + 38, y + 58, 16, 2, 'c');
+  // ladder on the wall
+  R(x + 56 - 2, y + 24, 1, 16, 'n'); R(x + 56, y + 24, 1, 16, 'n'); for (let k = 0; k < 16; k += 3) X(x + 55, y + 25 + k, 'n');
+  // fire hydrant
+  SP('hydrant', x + 51, y + 66);
+};
+
+BLD.library = (x, y, t) => {
+  pave(x, y + 50, 56, 6);
+  // triangular pediment with giant open-book sign
+  for (let i = 0; i < 10; i++) { R(x + 28 - i * 3 - 1, y + 4 + i, i * 6 + 2, 1, 'a'); R(x + 28 - i * 3, y + 4 + i, i * 6, 1, i === 9 ? 'o' : 'n'); }
+  R(x, y + 14, 56, 3, 'a'); R(x + 1, y + 14, 54, 2, 'm');
+  const pg = Math.floor(t / 800) % 2;
+  SP('i_book', x + 21, y + 1);
+  if (pg) { R(x + 28, y + 2, 4, 1, 'm'); X(x + 27, y + 3, 'm'); }
+  // grey stone front
+  O(x + 2, y + 16, 52, 30, 'n'); for (let yy = 19; yy < 46; yy += 4) R(x + 3, y + yy, 50, 1, 'o');
+  // columns
+  [4, 16, 34, 46].forEach(cx => { R(x + cx, y + 17, 6, 29, 'm'); R(x + cx + 4, y + 18, 1, 27, 'n'); R(x + cx - 1, y + 17, 8, 2, 'm'); R(x + cx - 1, y + 43, 8, 3, 'm'); frame(x + cx - 1, y + 17, 8, 29, 'o'); });
+  // windows with colourful book spines
+  const bc = ['c', 'e', 'j', 'g', 'd', 'b', 'k', 'r'];
+  [[10, 21], [40, 21]].forEach(([wx, wy]) => {
+    R(x + wx, y + wy, 6, 20, 'a');
+    for (let s = 0; s < 3; s++) { for (let b = 0; b < 4; b++) R(x + wx + 1 + b, y + wy + 1 + s * 6 + (b % 2), 1, 5 - (b % 2), bc[(b + s * 3 + wx) % 8]); R(x + wx + 1, y + wy + 6 + s * 6, 4, 1, 'q'); }
+  });
+  // door
+  O(x + 24, y + 26, 8, 20, 'q'); R(x + 28, y + 27, 1, 18, 'a'); R(x + 23, y + 23, 10, 3, 'a'); R(x + 24, y + 24, 8, 1, 'e');
+  // wide steps
+  R(x + 0, y + 46, 56, 2, 'm'); R(x - 1, y + 48, 58, 2, 'n'); R(x - 2, y + 50, 60, 2, 'm'); hline(x - 2, y + 52, 60, 'o');
+};
+
+BLD.bank = (x, y, t) => {
+  pave(x, y + 50, 54, 8);
+  // triangle roof with a big gold coin
+  for (let i = 0; i < 14; i++) { R(x + 27 - i * 2 - 1, y + 2 + i, i * 4 + 2, 1, 'a'); R(x + 27 - i * 2, y + 2 + i, i * 4, 1, i === 13 ? 'n' : 'm'); }
+  R(x, y + 16, 54, 3, 'a'); R(x + 1, y + 16, 52, 2, 'm');
+  const spin = Math.floor(t / 250) % 8;
+  const cw = [7, 7, 5, 3, 1, 3, 5, 7][spin];
+  R(x + 27 - (cw >> 1) - 1, y + 5, cw + 2, 9, 'a'); R(x + 27 - (cw >> 1), y + 6, cw, 7, 'e'); if (cw > 3) { R(x + 27 - (cw >> 1) + 1, y + 7, cw - 2, 5, 'd'); R(x + 27, y + 7, 1, 5, 'e'); } X(x + 27 - (cw >> 1), y + 6, 'm');
+  // marble with four columns
+  O(x + 2, y + 18, 50, 30, 'm'); R(x + 3, y + 19, 48, 2, 'n');
+  [5, 15, 33, 43].forEach(cx => { R(x + cx, y + 21, 5, 25, 'm'); R(x + cx + 1, y + 22, 1, 23, 'n'); R(x + cx + 3, y + 22, 1, 23, 'n'); R(x + cx - 1, y + 20, 7, 2, 'n'); R(x + cx - 1, y + 44, 7, 2, 'n'); });
+  // round vault door through a window
+  O(x + 10, y + 26, 5, 12, 'p'); O(x + 38, y + 26, 5, 12, 'p');
+  R(x + 11, y + 29, 3, 6, 'o'); X(x + 12, y + 31, 'e');
+  O(x + 38, y + 26, 5, 12, 'o'); R(x + 39, y + 28, 3, 8, 'n'); R(x + 40, y + 29, 1, 6, 'o'); X(x + 40, y + 31, 'e');
+  // door
+  O(x + 22, y + 28, 10, 20, 'q'); R(x + 27, y + 29, 1, 18, 'a'); X(x + 25, y + 38, 'e'); X(x + 29, y + 38, 'e');
+  // cash machine
+  O(x + 47, y + 32, 6, 13, 'o'); R(x + 48, y + 33, 4, 3, blinkOn(t, 800) ? 'f' : 'g'); R(x + 48, y + 37, 4, 1, 'a'); R(x + 48, y + 39, 4, 2, 'n');
+  R(x - 1, y + 48, 56, 2, 'n');
+};
+
+BLD.theatre = (x, y, t) => {
+  pave(x, y + 56, 52, 8);
+  // masks sign on top
+  O(x + 17, y + 0, 18, 11, 'b'); R(x + 18, y + 1, 16, 1, 'e');
+  const tilt = Math.floor(t / 900) % 2;
+  SP('i_masks', x + 19, y + 2 + tilt);
+  // fancy front
+  R(x + 1, y + 10, 50, 5, 'a'); R(x + 2, y + 11, 48, 2, 'e'); R(x + 1, y + 13, 50, 2, 'c');
+  O(x + 2, y + 14, 48, 43, 'c'); R(x + 3, y + 15, 46, 1, 'e');
+  for (let k = 0; k < 48; k += 6) { X(x + 4 + k, y + 16, 'e'); }
+  // marquee with chasing lights
+  O(x + 4, y + 18, 44, 10, 'a'); R(x + 5, y + 19, 42, 8, 'p');
+  const ph = Math.floor(t / 120) % 3;
+  for (let k = 0; k < 42; k += 2) { X(x + 5 + k, y + 19, (k / 2 + ph) % 3 === 0 ? 'e' : 'q'); X(x + 5 + k, y + 26, (k / 2 + ph) % 3 === 0 ? 'e' : 'q'); }
+  micro('SHOW', x + 26 - (microW('SHOW') >> 1), y + 21, 'e');
+  // red curtain motif around the entrance
+  R(x + 8, y + 30, 36, 27, 'a');
+  R(x + 9, y + 31, 34, 26, 'p');
+  for (let k = 0; k < 11; k++) { R(x + 9, y + 31 + k, 11 - k, 1, 'c'); R(x + 33 + k, y + 31 + k, 10 - k, 1, 'c'); }
+  R(x + 9, y + 31, 2, 26, 'c'); R(x + 41, y + 31, 2, 26, 'c'); X(x + 10, y + 34, 'b'); X(x + 42, y + 34, 'b');
+  R(x + 9, y + 31, 34, 2, 'c'); for (let k = 0; k < 34; k += 4) X(x + 11 + k, y + 33, 'c');
+  // doors with a star
+  O(x + 19, y + 40, 14, 17, 'b'); R(x + 26, y + 41, 1, 16, 'a');
+  SP('i_star', x + 21, y + 43); X(x + 30, y + 49, 'e');
+  // posters
+  O(x + 3, y + 34, 5, 8, 'e'); R(x + 4, y + 36, 3, 3, 'c'); O(x + 44, y + 34, 5, 8, 'e'); R(x + 45, y + 36, 3, 3, 'j');
+};
+
+BLD.hotel = (x, y, t) => {
+  pave(x, y + 84, 34, 8);
+  // flags on the roof
+  flag(x + 5, y - 2, t, 'c', 'm'); flag(x + 22, y - 2, t + 300, 'j', 'e');
+  R(x + 1, y + 9, 32, 6, 'a'); R(x + 2, y + 10, 30, 2, 'o'); R(x + 1, y + 13, 32, 2, 'p');
+  O(x + 2, y + 14, 30, 71, 'h'); R(x + 27, y + 15, 4, 69, 'i');
+  const lit = (i, j) => ((i * 5 + j * 3 + Math.floor(t / 4000)) % 7) < 3;
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 3; i++) win(x + 5 + i * 7, y + 18 + j * 8, 5, 6, 'a', lit(i, j) ? 'e' : 'j');
+  // vertical HOTEL sign
+  O(x + 25, y + 16, 7, 33, 'c'); microV('HOTEL', x + 27, y + 18, blinkOn(t, 1200) || Math.floor(t / 150) % 9 ? 'e' : 'd');
+  // entrance canopy + revolving door
+  R(x + 4, y + 72, 22, 3, 'c'); R(x + 4, y + 75, 22, 1, 'b'); for (let k = 0; k < 22; k += 3) X(x + 5 + k, y + 72, 'e');
+  O(x + 9, y + 76, 12, 9, 'l');
+  const r = Math.floor(t / 160) % 6; const dx = [0, 2, 4, 6, 8, 10][r];
+  R(x + 10 + dx, y + 77, 1, 7, 'o'); R(x + 20 - dx, y + 77, 1, 7, 'o');
+  // luggage trolley
+  R(x + 25, y + 80, 1, 6, 'e'); R(x + 31, y + 80, 1, 6, 'e'); R(x + 25, y + 79, 7, 1, 'e'); R(x + 25, y + 86, 7, 1, 'e');
+  SP('suitcaseS', x + 25, y + 81); X(x + 25, y + 88, 'a'); X(x + 31, y + 88, 'a');
+};
+
+BLD.salon = (x, y, t) => {
+  pave(x, y + 44, 22, 6);
+  // big scissors sign
+  const snip = Math.floor(t / 400) % 2;
+  O(x + 3, y + 0, 16, 13, 'b');
+  SP('i_scissors', x + 5, y + 1, null, !!snip);
+  R(x + 1, y + 13, 20, 5, 'a'); R(x + 2, y + 14, 18, 2, 'm'); R(x + 1, y + 16, 20, 2, 'b');
+  O(x + 1, y + 17, 20, 28, 'm'); R(x + 17, y + 18, 3, 26, 'n');
+  // window: mirror and chair
+  O(x + 3, y + 21, 13, 10, 'l'); O(x + 5, y + 22, 5, 5, 'n'); X(x + 6, y + 23, 'm'); R(x + 11, y + 25, 3, 3, 'c'); R(x + 12, y + 28, 1, 2, 'o'); R(x + 11, y + 22, 3, 3, 'c');
+  O(x + 4, y + 32, 9, 13, 'b'); R(x + 5, y + 33, 7, 5, 'l');
+  // spinning barber pole
+  O(x + 15, y + 30, 5, 12, 'm'); R(x + 15, y + 29, 5, 2, 'n'); R(x + 15, y + 41, 5, 2, 'n');
+  const s = Math.floor(t / 120) % 4;
+  for (let k = 0; k < 10; k++) for (let i = 0; i < 3; i++) if (((k + i + s) % 4) < 2) X(x + 16 + i, y + 31 + k, (k + s) % 8 < 4 ? 'c' : 'j');
+};
+
+BLD.supermarket = (x, y, t) => {
+  pave(x, y + 34, 64, 12);
+  R(x, y + 4, 64, 6, 'a'); R(x + 1, y + 5, 62, 2, 'n'); R(x, y + 8, 64, 2, 'o');
+  O(x + 1, y + 9, 62, 26, 'm');
+  // sign
+  O(x + 18, y + 0, 28, 8, 'g'); micro('MARKET', x + 32 - (microW('MARKET') >> 1), y + 2, 'm');
+  // green-and-white awning
+  awning(x + 2, y + 11, 60, 'g', 'm');
+  // full glass front
+  R(x + 2, y + 17, 60, 17, 'a'); R(x + 3, y + 18, 58, 16, 'l');
+  for (let k = 0; k < 58; k += 10) R(x + 3 + k, y + 18, 1, 16, 'n');
+  for (let k = 0; k < 58; k += 6) { X(x + 5 + k, y + 22, ['c', 'e', 'g', 'd'][k % 4]); X(x + 6 + k, y + 22, ['e', 'g', 'd', 'c'][k % 4]); }
+  R(x + 3, y + 23, 58, 1, 'n');
+  R(x + 27, y + 21, 10, 13, 'k'); R(x + 32, y + 21, 1, 13, 'n');
+  // blinking OPEN sign
+  const on = blinkOn(t, 600);
+  O(x + 46, y + 19, 15, 7, on ? 'c' : 'p'); micro('OPEN', x + 47 + 0, y + 20, on ? 'e' : 'o');
+  // trolleys & fruit crates
+  for (let k = 0; k < 3; k++) SP('trolley', x + 3 + k * 3, y + 36);
+  const fruit = ['c', 'e', 'f', 'd'];
+  for (let k = 0; k < 3; k++) { SP('crate', x + 40 + k * 8, y + 39); for (let i = 0; i < 3; i++) X(x + 42 + k * 8 + i * 2, y + 39, fruit[(k + i) % 4]); X(x + 43 + k * 8, y + 38, fruit[(k + 1) % 4]); }
+};
+
+/* ---------------- BUILDINGS (part 2) ---------------- */
+function line(x0, y0, x1, y1, c) {
+  x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+  for (let i = 0; i < 400; i++) { X(x0, y0, c); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+}
+function SP2(name, x, y, s, subs) { const c = spr(name, subs); G.imageSmoothingEnabled = false; G.drawImage(c, Math.round(x), Math.round(y), c.width * s, c.height * s); return c; }
+function microBig(str, x, y, c, s) {
+  let cx = x;
+  for (const ch of str) { const m = MICRO[ch] || MICRO[' ']; for (let r = 0; r < 5; r++) for (let k = 0; k < m[r].length; k++) if (m[r][k] === '#') R(cx + k * s, y + r * s, s, s, c); cx += (m[0].length + 1) * s; }
+}
+function tri(t, period) { const p = (t % period) / period; return p < 0.5 ? p * 2 : 2 - p * 2; }
+
+BLD.bakery = (x, y, t) => {
+  pave(x, y + 44, 45, 6);
+  O(x + 31, y + 1, 7, 12, 'c'); R(x + 32, y + 4, 5, 1, 'b'); R(x + 32, y + 8, 5, 1, 'b'); R(x + 30, y + 1, 9, 2, 'a');
+  smoke(x + 33, y - 1, t, 3);
+  pitchRoof(x + 2, y + 8, 41, 10, 'r', 'q');
+  // giant bread-loaf sign on the roof
+  const bob = Math.floor(t / 700) % 2;
+  SP('i_bread', x + 7, y + 2 + bob);
+  // cottage walls, pink awning
+  O(x + 2, y + 19, 41, 26, 's'); R(x + 38, y + 20, 4, 24, 'r');
+  awning(x + 3, y + 21, 39, 'c', 'm');
+  O(x + 4, y + 28, 22, 12, 'l'); R(x + 5, y + 34, 20, 1, 'q');
+  for (let k = 0; k < 4; k++) { R(x + 6 + k * 5, y + 31, 4, 3, 'r'); R(x + 7 + k * 5, y + 31, 2, 1, 'e'); }
+  R(x + 7, y + 36, 7, 3, 'm'); R(x + 7, y + 37, 7, 1, 'c'); X(x + 10, y + 35, 'c'); R(x + 17, y + 36, 6, 3, 'e'); R(x + 17, y + 36, 6, 1, 'r');
+  O(x + 29, y + 27, 9, 18, 'q'); R(x + 30, y + 28, 7, 6, 'l'); X(x + 36, y + 36, 'e');
+  R(x + 40, y + 38, 4, 6, 'a'); R(x + 41, y + 39, 2, 3, 'm');
+};
+
+BLD.restaurant = (x, y, t) => {
+  pave(x, y + 38, 60, 16);
+  R(x + 44, y + 2, 7, 6, 'a'); R(x + 45, y + 3, 5, 4, 'n'); R(x + 45, y + 4, 5, 1, 'o');
+  smoke(x + 46, y + 1, t + 500, 3);
+  flatRoof(x + 2, y + 7, 56, 'o', 'p');
+  O(x + 5, y + 0, 14, 11, 'c'); SP('i_chefhat', x + 7, y + 1 + (Math.floor(t / 900) % 2));
+  O(x + 1, y + 12, 58, 27, 'm'); R(x + 2, y + 31, 56, 7, 'c'); for (let k = 0; k < 56; k += 4) X(x + 3 + k, y + 32, 'b');
+  awning(x + 2, y + 14, 56, 'c', 'm');
+  const glow = Math.floor(t / 1500) % 2 ? 'e' : 'd';
+  O(x + 4, y + 21, 17, 10, glow); O(x + 39, y + 21, 17, 10, glow);
+  R(x + 7, y + 27, 5, 1, 'q'); R(x + 13, y + 26, 3, 3, 'b'); R(x + 43, y + 27, 5, 1, 'q'); R(x + 50, y + 26, 3, 3, 'b');
+  O(x + 25, y + 20, 10, 19, 'q'); R(x + 30, y + 21, 1, 17, 'a'); R(x + 26, y + 21, 3, 6, 'e'); R(x + 31, y + 21, 3, 6, 'e');
+  // outdoor tables with umbrellas
+  [[3, 'c'], [23, 'j'], [43, 'c']].forEach(([tx, uc]) => {
+    const ux = x + tx;
+    R(ux + 2, y + 39, 9, 1, 'a'); R(ux, y + 40, 13, 2, 'a');
+    for (let k = 0; k < 11; k++) R(ux + 1 + k, y + 40, 1, 1, k % 4 < 2 ? uc : 'm');
+    R(ux + 3, y + 39, 7, 1, uc);
+    R(ux + 6, y + 42, 1, 6, 'n'); R(ux + 3, y + 47, 7, 2, 'm'); R(ux + 3, y + 49, 7, 1, 'n');
+    R(ux + 1, y + 47, 1, 4, 'q'); R(ux + 11, y + 47, 1, 4, 'q');
+  });
+};
+
+BLD.post = (x, y, t) => {
+  pave(x, y + 48, 49, 8);
+  // big envelope sign
+  O(x + 15, y + 0, 19, 13, 'j');
+  const pop = Math.floor(t / 1000) % 3 === 0 ? 1 : 0;
+  SP('i_env', x + 19, y + 2 - pop);
+  R(x, y + 12, 49, 6, 'a'); R(x + 1, y + 13, 47, 2, 'j');
+  // stamp-shaped trim
+  R(x + 1, y + 15, 47, 3, 'm'); for (let k = 0; k < 47; k += 2) X(x + 1 + k, y + 17, 'j');
+  O(x + 1, y + 18, 47, 31, 'j'); R(x + 43, y + 19, 4, 29, 'i');
+  R(x + 3, y + 20, 43, 7, 'i'); micro('POST', x + 24 - (microW('POST') >> 1), y + 21, 'm');
+  win(x + 4, y + 30, 11, 10, 'a', 'k'); R(x + 9, y + 31, 1, 8, 'a'); win(x + 34, y + 30, 9, 10, 'a', 'k');
+  O(x + 19, y + 29, 11, 20, 'm'); R(x + 20, y + 30, 9, 7, 'l'); X(x + 27, y + 39, 'j');
+  SP('postbox', x + 3, y + 46);
+  SP('mailvan', x + 34, y + 45);
+};
+
+BLD.park = (x, y, t) => {
+  // lawn with hedge border and paths
+  R(x, y, 62, 118, 'g'); dither(x + 1, y + 1, 60, 116, 'f', G, 0); R(x + 1, y + 1, 60, 116, 'g');
+  for (let i = 0; i < 60; i += 7) for (let j = 0; j < 116; j += 5) X(x + 2 + i + (j % 3), y + 2 + j, 'f');
+  R(x, y, 62, 3, 'h'); R(x, y + 115, 26, 3, 'h'); R(x + 36, y + 115, 26, 3, 'h'); R(x, y, 3, 118, 'h'); R(x + 59, y, 3, 118, 'h');
+  for (let k = 0; k < 62; k += 3) { X(x + k, y, 'g'); X(x + k + 1, y + 116, 'g'); }
+  R(x + 27, y + 3, 8, 115, 'e'); R(x + 3, y + 57, 56, 7, 'e'); dither(x + 27, y + 3, 8, 115, 'd', G);
+  R(x + 28, y + 3, 6, 115, 'e'); R(x + 3, y + 58, 56, 5, 'e');
+  // pond with ducks
+  const pcx = x + 14, pcy = y + 22;
+  for (let dy = -12; dy <= 12; dy++) { const hw = Math.round(11 * Math.sqrt(1 - (dy * dy) / 156)); R(pcx - hw - 1, pcy + dy, hw * 2 + 2, 1, 'n'); R(pcx - hw, pcy + dy, hw * 2, 1, Math.abs(dy) > 9 ? 'k' : 'j'); }
+  const wv = Math.floor(t / 500) % 4;
+  R(pcx - 6 + wv, pcy - 4, 3, 1, 'k'); R(pcx + 2 - wv, pcy + 5, 3, 1, 'k'); X(pcx - 1, pcy + wv - 1, 'l');
+  for (let d = 0; d < 2; d++) {
+    const a = t / 4000 + d * Math.PI;
+    const dx = Math.round(Math.cos(a) * 6), dy = Math.round(Math.sin(a) * 5);
+    SP('duck', pcx - 3 + dx, pcy - 3 + dy, null, Math.sin(a) > 0);
+  }
+  // reeds
+  X(x + 4, y + 30, 'h'); X(x + 4, y + 29, 'q'); X(x + 23, y + 12, 'h'); X(x + 23, y + 11, 'q');
+  // fountain (spraying)
+  const fx = x + 31, fy = y + 60;
+  R(fx - 9, fy - 3, 18, 8, 'a'); R(fx - 8, fy - 2, 16, 6, 'n'); R(fx - 7, fy - 1, 14, 4, 'k'); X(fx - 5 + wv, fy, 'l');
+  R(fx - 1, fy - 7, 2, 6, 'n');
+  const f = Math.floor(t / 120);
+  for (let k = 0; k < 6; k++) {
+    const age = (f + k * 2) % 12, side = k % 2 ? 1 : -1;
+    const hx = Math.round(side * age * 0.6), hy = Math.round(-9 + (age - 5) * (age - 5) * 0.3);
+    X(fx + hx, fy - 5 + hy, age < 6 ? 'l' : 'm');
+  }
+  R(fx - 1, fy - 12, 2, 5, 'l'); X(fx, fy - 13 - (f % 2), 'm');
+  // flowerbeds
+  [[5, 72], [39, 72], [39, 90]].forEach(([bx, by], i) => {
+    O(x + bx, y + by, 18, 10, 'q');
+    for (let k = 0; k < 16; k += 2) { X(x + bx + 1 + k, y + by + 3 + (k % 4 === 0 ? 0 : 3), ['c', 'e', 'b', 'm'][(k / 2 + i) % 4]); X(x + bx + 1 + k, y + by + 4 + (k % 4 === 0 ? 0 : 3), 'g'); }
+  });
+  // trees, bench, wheelbarrow
+  SP('tree', x + 40, y + 6); SP('tree', x + 46, y + 28); SP('pine', x + 4, y + 88);
+  SP('bench', x + 40, y + 104);
+  const wb = x + 12, wy = y + 104;
+  R(wb, wy, 9, 1, 'a'); R(wb + 1, wy + 1, 8, 3, 'c'); R(wb + 2, wy + 4, 6, 1, 'b'); R(wb + 1, wy - 1, 7, 1, 'q'); X(wb + 3, wy - 2, 'g'); X(wb + 6, wy - 2, 'f');
+  R(wb + 3, wy + 5, 2, 2, 'a'); R(wb + 9, wy + 2, 4, 1, 'q'); R(wb + 7, wy + 5, 1, 2, 'o');
+};
+
+BLD.pool = (x, y, t) => {
+  R(x, y + 8, 49, 92, 'm'); for (let i = 0; i < 49; i += 4) R(x + i, y + 8, 1, 92, 'n'); for (let j = 8; j < 100; j += 4) R(x, y + j, 49, 1, 'n');
+  // pool house
+  R(x + 1, y + 0, 47, 4, 'a'); R(x + 2, y + 1, 45, 2, 'l'); O(x + 2, y + 3, 45, 12, 'j'); micro('POOL', x + 24 - (microW('POOL') >> 1), y + 6, 'm');
+  R(x + 3, y + 4, 2, 10, 'k'); R(x + 44, y + 4, 2, 10, 'k');
+  // the pool, rippling water, lane ropes
+  O(x + 6, y + 20, 36, 62, 'k'); R(x + 7, y + 21, 34, 60, 'j'); R(x + 7, y + 21, 34, 2, 'k');
+  const ph = Math.floor(t / 250);
+  for (let j = 0; j < 12; j++) { const ox = (ph + j * 7) % 30; R(x + 8 + ox % 30, y + 25 + j * 5, 3, 1, 'k'); if (j % 3 === 0) X(x + 9 + (ox + 13) % 30, y + 27 + j * 5, 'l'); }
+  [15, 24, 33].forEach(lx => { for (let j = 0; j < 60; j += 2) X(x + lx, y + 21 + j, (j / 2) % 4 < 2 ? 'c' : 'm'); });
+  // a swimmer doing laps
+  const sy = y + 26 + Math.round(tri(t, 9000) * 48);
+  X(x + 19, sy, 's'); X(x + 20, sy, 's'); R(x + 19, sy - 1, 2, 1, 'e');
+  if (Math.floor(t / 200) % 2) { X(x + 17, sy + 1, 'm'); X(x + 22, sy - 1, 'm'); } else { X(x + 22, sy + 1, 'm'); X(x + 17, sy - 1, 'm'); }
+  // diving board
+  R(x + 19, y + 80, 10, 5, 'a'); R(x + 20, y + 79, 8, 3, 'n'); R(x + 20, y + 80, 8, 1, 'm'); R(x + 21, y + 84, 6, 3, 'o');
+  R(x + 22, y + 87, 1, 5, 'n'); R(x + 25, y + 87, 1, 5, 'n');
+  // tall lifeguard chair with umbrella
+  const lx = x + 42;
+  R(lx, y + 40, 1, 20, 'r'); R(lx + 5, y + 40, 1, 20, 'r'); for (let k = 0; k < 18; k += 4) R(lx, y + 42 + k, 6, 1, 'r');
+  R(lx - 1, y + 36, 8, 4, 'c'); R(lx, y + 37, 6, 2, 'm');
+  R(lx + 3, y + 26, 1, 10, 'n');
+  R(lx - 2, y + 25, 11, 1, 'a'); R(lx - 3, y + 26, 13, 2, 'a');
+  for (let k = 0; k < 11; k++) R(lx - 2 + k, y + 26, 1, 1, k % 4 < 2 ? 'e' : 'c'); R(lx, y + 25, 7, 1, 'e');
+  // striped towels
+  stripes(x + 1, y + 30, 4, 10, 'c', 'm', 1); stripes(x + 1, y + 50, 4, 10, 'e', 'j', 1);
+  R(x + 1, y + 30, 4, 1, 'a'); R(x + 1, y + 50, 4, 1, 'a');
+};
+
+BLD.farm = (x, y, t) => {
+  // crop fields in rows
+  R(x + 2, y + 44, 58, 68, 'q');
+  for (let r = 0; r < 17; r++) { const yy = y + 45 + r * 4; R(x + 3, yy, 56, 2, r < 6 ? 'e' : 'g'); for (let k = 0; k < 56; k += 3) X(x + 4 + k, yy - 1, r < 6 ? 'd' : 'f'); }
+  for (let k = 0; k < 56; k += 4) X(x + 4 + k, y + 44, 'e');
+  // tractor ploughing back and forth
+  const tp = tri(t, 16000), tx = x + 4 + Math.round(tp * 44), goingRight = (t % 16000) < 8000;
+  SP('tractor', tx, y + 28, null, !goingRight);
+  if (Math.floor(t / 200) % 2) X(tx + (goingRight ? 8 : 4), y + 27, 'n');
+  // red barn with white X doors
+  for (let i = 0; i < 16; i++) { const ins = i < 6 ? Math.floor((6 - i) * 1.5) : 0; R(x + 68 + ins - 1, y + 24 + i, 44 - ins * 2 + 2, 1, 'a'); R(x + 68 + ins, y + 24 + i, 44 - ins * 2, 1, i % 3 === 2 ? 'b' : 'c'); }
+  R(x + 66, y + 40, 48, 2, 'a');
+  O(x + 69, y + 41, 42, 40, 'c'); for (let k = 0; k < 40; k += 4) R(x + 70 + k, y + 42, 1, 38, 'b');
+  O(x + 84, y + 28, 12, 9, 'm'); R(x + 85, y + 29, 10, 7, 'q'); R(x + 86, y + 32, 8, 4, 'e');
+  O(x + 80, y + 55, 20, 26, 'm'); R(x + 81, y + 56, 18, 24, 'c'); line(x + 81, y + 56, x + 98, y + 79, 'm'); line(x + 98, y + 56, x + 81, y + 79, 'm'); R(x + 90, y + 56, 1, 24, 'm');
+  // silo
+  O(x + 114, y + 26, 12, 55, 'n'); R(x + 122, y + 27, 3, 53, 'o'); for (let k = 0; k < 50; k += 9) R(x + 115, y + 30 + k, 10, 1, 'o');
+  for (let i = 0; i < 5; i++) { R(x + 115 + i - 1, y + 21 + i, 12 - i * 2 + 2 + (i ? 0 : 0), 1, 'a'); }
+  R(x + 115, y + 22, 10, 4, 'j'); R(x + 116, y + 21, 8, 1, 'j'); X(x + 117, y + 22, 'k');
+  // windmill with turning blades
+  const mx = x + 144, my = y + 30;
+  for (let i = 0; i < 50; i++) { const hw = 3 + Math.floor(i / 9); R(mx - hw - 1, my + i, hw * 2 + 2, 1, 'a'); R(mx - hw, my + i, hw * 2, 1, i % 6 === 0 ? 'n' : 'm'); }
+  O(mx - 2, my + 38, 5, 12, 'q');
+  const ang = Math.floor(t / 150) % 16 * (Math.PI / 8);
+  for (let b = 0; b < 4; b++) {
+    const a = ang + b * Math.PI / 2, ex = mx + Math.cos(a) * 15, ey = my + Math.sin(a) * 15;
+    line(mx, my, ex, ey, 'q');
+    const nx = -Math.sin(a) * 2, ny = Math.cos(a) * 2;
+    line(mx + Math.cos(a) * 5 + nx, my + Math.sin(a) * 5 + ny, ex + nx, ey + ny, 'm');
+  }
+  R(mx - 1, my - 1, 3, 3, 'a'); X(mx, my, 'e');
+  // fenced pasture with wandering animals
+  R(x + 64, y + 84, 94, 28, 'f'); dither(x + 64, y + 84, 94, 28, 'g', G);
+  for (let k = 0; k < 95; k += 4) R(x + 64 + k, y + 83, 1, 4, 'q'); R(x + 64, y + 84, 94, 1, 'r'); R(x + 64, y + 111, 94, 1, 'r');
+  for (let k = 0; k < 95; k += 4) R(x + 64 + k, y + 109, 1, 4, 'q');
+  const wander = (i, amp, sp) => Math.round(Math.sin(t / sp + i * 1.7) * amp);
+  SP('cow', x + 70 + wander(0, 8, 3000), y + 88, null, Math.cos(t / 3000) < 0);
+  SP('cow', x + 118 + wander(1, 6, 3500), y + 96, null, Math.cos(t / 3500 + 1.7) < 0);
+  SP('sheep', x + 96 + wander(2, 6, 2600), y + 99, null, Math.cos(t / 2600 + 3.4) < 0);
+  SP('sheep', x + 140 + wander(3, 5, 2900), y + 90, null, Math.cos(t / 2900 + 5.1) < 0);
+  for (let c = 0; c < 3; c++) { const peck = Math.floor(t / 300 + c) % 4 === 0 ? 1 : 0; SP('chicken', x + 104 + c * 6 + wander(c + 4, 3, 1500), y + 76 + peck + (c % 2), null, c % 2 === 0); }
+};
+
+BLD.zoo = (x, y, t) => {
+  // enclosures
+  R(x + 2, y + 6, 60, 88, 'f'); dither(x + 2, y + 6, 60, 88, 'g', G);
+  R(x + 98, y + 6, 60, 88, 'e'); dither(x + 98, y + 6, 60, 88, 'd', G, 1);
+  R(x + 62, y + 6, 36, 94, 'e'); R(x + 64, y + 6, 32, 94, 'd'); dither(x + 64, y + 6, 32, 94, 'e', G);
+  const fence = (fx, fy, w) => { R(fx, fy, w, 1, 'q'); R(fx, fy + 3, w, 1, 'q'); for (let k = 0; k < w; k += 3) R(fx + k, fy - 1, 1, 6, 'r'); };
+  fence(x + 2, y + 4, 60); fence(x + 98, y + 4, 60);
+  for (let k = 0; k < 90; k += 3) { R(x + 1, y + 6 + k, 2, 1, 'r'); R(x + 61, y + 6 + k, 2, 1, 'r'); R(x + 97, y + 6 + k, 2, 1, 'r'); R(x + 157, y + 6 + k, 2, 1, 'r'); }
+  // acacia tree and pond
+  SP('tree', x + 8, y + 12); SP('bush', x + 44, y + 70);
+  R(x + 124, y + 22, 24, 10, 'j'); R(x + 122, y + 24, 28, 6, 'j'); R(x + 126, y + 23, 5, 1, 'k'); X(x + 140 + (Math.floor(t / 400) % 3), y + 27, 'l');
+  // giraffe: neck pokes over the front fence
+  const gb = Math.floor(t / 1100) % 2;
+  R(x + 24, y + 74, 20, 10, 'e'); for (let k = 0; k < 6; k++) R(x + 26 + (k * 7) % 17, y + 75 + (k * 3) % 8, 2, 2, 'q');
+  R(x + 25, y + 84, 2, 8, 'e'); R(x + 41, y + 84, 2, 8, 'e'); R(x + 30, y + 84, 2, 8, 'e'); R(x + 37, y + 84, 2, 8, 'e');
+  const gs = SP('giraffe', x + 38, y + 50 + gb);
+  R(x + 41, y + 62 + gb, 3, 12 - gb, 'e'); X(x + 42, y + 66, 'q'); X(x + 41, y + 70, 'q');
+  // elephant (flaps ears, swings trunk)
+  const ex = x + 108 + Math.round(Math.sin(t / 3000) * 6);
+  SP('elephant', ex, y + 58);
+  const flap = Math.floor(t / 500) % 2;
+  R(ex + 3, y + 60, 4, 5 - flap, 'o'); X(ex + 13 + (flap ? 1 : 0), y + 68, 'o');
+  // front fence with gate arch and big ZOO sign
+  for (let k = 0; k < 160; k += 2) if (k < 62 || k > 97) R(x + k, y + 92, 1, 10, 'q');
+  R(x, y + 93, 62, 1, 'r'); R(x, y + 99, 62, 1, 'r'); R(x + 98, y + 93, 62, 1, 'r'); R(x + 98, y + 99, 62, 1, 'r');
+  O(x + 62, y + 76, 6, 28, 'q'); O(x + 92, y + 76, 6, 28, 'q');
+  O(x + 60, y + 72, 40, 12, 'g'); R(x + 61, y + 73, 38, 1, 'f');
+  microBig('ZOO', x + 69, y + 73, 'e', 2);
+  X(x + 64, y + 70, 'f'); X(x + 95, y + 70, 'f');
+  for (let k = 0; k < 4; k++) { const a = Math.floor(t / 250) % 4 === k; X(x + 62 + k * 11, y + 71, a ? 'e' : 'd'); }
+  R(x + 69, y + 100, 22, 18, 'e');
+};
+
+BLD.vet = (x, y, t) => {
+  pave(x, y + 42, 44, 6);
+  pitchRoof(x + 2, y + 7, 40, 8, 'g', 'h');
+  // paw-print sign
+  O(x + 13, y + 0, 18, 12, 'b');
+  const pc = blinkOn(t, 1000) ? 'm' : 'e';
+  R(x + 19, y + 6, 6, 4, pc); R(x + 18, y + 7, 8, 2, pc); R(x + 16, y + 3, 2, 2, pc); R(x + 19, y + 2, 2, 2, pc); R(x + 23, y + 2, 2, 2, pc); R(x + 26, y + 3, 2, 2, pc);
+  O(x + 2, y + 16, 40, 27, 'm'); R(x + 3, y + 35, 38, 7, 'l'); R(x + 38, y + 17, 3, 25, 'n');
+  // window with a dog wagging its tail
+  O(x + 4, y + 21, 18, 13, 'k'); R(x + 5, y + 22, 16, 11, 'l'); R(x + 5, y + 31, 16, 2, 'c');
+  SP('dog', x + 7, y + 24);
+  const wag = Math.floor(t / 150) % 2;
+  R(x + 7, y + 25, 2, 2, 'l'); X(x + 7, y + 25 + wag * 2, 'r'); X(x + 6, y + 24 + wag * 3, 'a');
+  O(x + 26, y + 21, 11, 22, 'g'); R(x + 27, y + 22, 9, 7, 'l'); X(x + 34, y + 32, 'e');
+  SP('carrier', x + 36, y + 37);
+};
+
+BLD.garage = (x, y, t) => {
+  pave(x, y + 40, 56, 14); R(x + 10, y + 46, 4, 2, 'o'); R(x + 26, y + 49, 3, 1, 'o');
+  O(x + 20, y + 0, 15, 12, 'e'); SP('i_wrench', x + 23, y + 1, blinkOn(t, 1400) ? null : { n: 'm' });
+  R(x, y + 10, 56, 6, 'a'); R(x + 1, y + 11, 54, 2, 'n'); R(x, y + 13, 56, 2, 'p');
+  O(x + 1, y + 15, 54, 26, 'o'); for (let k = 0; k < 54; k += 3) R(x + 2 + k, y + 16, 1, 24, 'n');
+  R(x + 4, y + 17, 1, 1, 'a');
+  // open door: car on a lift
+  O(x + 4, y + 18, 31, 23, 'a'); R(x + 5, y + 19, 29, 22, 'p');
+  for (let k = 0; k < 29; k += 6) X(x + 6 + k, y + 20, 'e');
+  const lift = Math.round(tri(t, 6000) * 4);
+  R(x + 18, y + 34 - lift, 3, 6 + lift, 'n');
+  R(x + 7, y + 33 - lift, 25, 2, 'e');
+  SP('car', x + 12, y + 24 - lift, { X: 'j' });
+  R(x + 4, y + 18, 31, 2, 'd'); for (let k = 0; k < 31; k += 4) X(x + 4 + k, y + 18, 'a');
+  win(x + 38, y + 20, 14, 8, 'a', 'k');
+  SP('tyre', x + 45, y + 31); SP('tyre', x + 45, y + 35); SP('tyre', x + 45, y + 39);
+  SP('drum', x + 37, y + 34);
+};
+
+BLD.recycling = (x, y, t) => {
+  pave(x, y + 30, 58, 34);
+  // shed
+  R(x + 1, y + 12, 32, 5, 'a'); R(x + 2, y + 13, 30, 2, 'f'); R(x + 1, y + 15, 32, 2, 'h');
+  O(x + 2, y + 17, 30, 20, 'g'); for (let k = 0; k < 30; k += 3) R(x + 3 + k, y + 18, 1, 18, 'h');
+  O(x + 8, y + 22, 16, 15, 'p'); R(x + 9, y + 23, 14, 2, 'o');
+  // big recycling-arrows sign
+  O(x + 34, y + 0, 23, 24, 'm'); R(x + 35, y + 1, 21, 22, 'm');
+  SP2('i_recycle', x + 35, y + 1, 2, blinkOn(t, 700) ? null : { g: 'h', f: 'g' });
+  R(x + 44, y + 24, 2, 8, 'o');
+  // colourful bins
+  SP('bin', x + 2, y + 40, { X: 'j' }); SP('bin', x + 10, y + 40, { X: 'g' }); SP('bin', x + 18, y + 40, { X: 'e' });
+  const lid = Math.floor(t / 900) % 3;
+  R(x + 3 + lid * 8, y + 39, 5, 1, ['j', 'g', 'e'][lid]);
+  // garbage truck with beacon
+  SP('garbage', x + 30, y + 48);
+  X(x + 43, y + 47, blinkOn(t, 300) ? 'd' : 'e'); X(x + 44, y + 47, 'a');
+  R(x + 3, y + 52, 8, 4, 'r'); R(x + 5, y + 50, 5, 2, 'q'); R(x + 13, y + 54, 6, 3, 'n');
+};
+
+BLD.airport = (x, y, t) => {
+  // tarmac and runway
+  R(x, y + 56, 136, 62, 'o'); for (let k = 0; k < 136; k += 8) X(x + k, y + 60, 'n');
+  const ry = y + 90;
+  R(x + 2, ry - 4, 132, 16, 'p'); R(x + 2, ry - 4, 132, 1, 'm'); R(x + 2, ry + 11, 132, 1, 'm');
+  for (let k = 12; k < 124; k += 12) R(x + 2 + k, ry + 3, 6, 1, 'm');
+  for (let k = 0; k < 14; k += 3) { R(x + 4, ry - 2 + k, 5, 1, 'm'); R(x + 127, ry - 2 + k, 5, 1, 'm'); }
+  micro('27', x + 12, ry + 1, 'm');
+  for (let k = 0; k < 132; k += 6) X(x + 2 + k, ry + 13, blinkOn(t + k * 20, 600) ? 'e' : 'd');
+  // terminal
+  R(x + 40, y + 30, 92, 5, 'a'); R(x + 41, y + 31, 90, 2, 'n');
+  O(x + 40, y + 34, 92, 24, 'm'); R(x + 41, y + 38, 90, 8, 'k'); for (let k = 0; k < 90; k += 6) R(x + 41 + k, y + 38, 1, 8, 'n'); R(x + 41, y + 38, 90, 1, 'l');
+  R(x + 60, y + 46, 12, 12, 'l'); R(x + 66, y + 46, 1, 12, 'k');
+  O(x + 88, y + 24, 36, 8, 'j'); micro('AIRPORT', x + 106 - (microW('AIRPORT') >> 1), y + 25, 'm');
+  // jet bridge
+  R(x + 110, y + 52, 4, 10, 'n'); R(x + 108, y + 60, 8, 3, 'o');
+  // control tower
+  O(x + 14, y + 12, 9, 46, 'm'); R(x + 20, y + 13, 2, 44, 'n'); for (let k = 0; k < 40; k += 8) R(x + 16, y + 16 + k, 3, 2, 'k');
+  R(x + 7, y + 10, 23, 3, 'a'); O(x + 8, y + 2, 21, 9, 'i'); R(x + 9, y + 4, 19, 4, 'l'); for (let k = 0; k < 19; k += 4) R(x + 9 + k, y + 4, 1, 4, 'i');
+  R(x + 8, y + 0, 21, 3, 'a'); R(x + 9, y + 1, 19, 1, 'p');
+  R(x + 18, y - 8, 1, 8, 'o'); X(x + 18, y - 9, blinkOn(t, 500) ? 'c' : 'b');
+  const radar = Math.floor(t / 300) % 4; R(x + 22 - (radar % 2) * 2, y - 2, 3 + (radar % 2) * 2, 1, 'n');
+  // windsock
+  R(x + 128, y + 62, 1, 18, 'n'); R(x + 126, y + 80, 5, 1, 'o');
+  const fl = Math.floor(t / 250) % 3;
+  for (let k = 0; k < 7; k++) R(x + 127 - k - 1, y + 62 + (k > 3 ? [0, 1, 0][fl] : 0), 1, 3 - (k > 4 ? 1 : 0), Math.floor(k / 2) % 2 ? 'm' : 'd');
+  // plane: waits, taxis, takes off (about every 20 s) and lands again
+  const T = t % 20000, xr = x + 104, yr = ry - 6; let pxp = null, pyp = yr, air = 0;
+  if (T < 4000) pxp = xr;
+  else if (T < 11000) { const p = (T - 4000) / 7000; pxp = xr - p * p * 80; }
+  else if (T < 13500) { const q = (T - 11000) / 2500; pxp = xr - 80 - q * 30; pyp = yr - q * q * 70; air = q; }
+  else if (T >= 16000) { const r = (T - 16000) / 4000; pxp = x + 150 - r * 46; pyp = yr - (1 - r) * (1 - r) * 40; air = 1 - r; }
+  if (pxp !== null && pxp > x - 16 && pyp > y - 30) {
+    if (air > 0) R(pxp + 3, yr + 9, 12, 1, 'a');
+    SP('plane', Math.round(pxp), Math.round(pyp));
+    if (blinkOn(t, 300)) X(Math.round(pxp) + 11, Math.round(pyp) + 1, 'c');
+  }
+};
+
+BLD.bus = (x, y, t) => {
+  pave(x, y + 8, 70, 30);
+  R(x, y + 38, 70, 16, 'p'); for (let k = 0; k < 70; k += 6) R(x + k, y + 45, 3, 1, 'e'); R(x, y + 38, 70, 1, 'e');
+  pave(x, y + 54, 70, 12);
+  // bus shelter
+  R(x + 3, y + 12, 36, 4, 'a'); R(x + 4, y + 13, 34, 2, 'g');
+  R(x + 5, y + 16, 1, 21, 'o'); R(x + 36, y + 16, 1, 21, 'o');
+  R(x + 6, y + 17, 30, 12, 'l'); for (let k = 0; k < 30; k += 10) R(x + 6 + k, y + 17, 1, 12, 'n'); X(x + 8, y + 18, 'm');
+  R(x + 8, y + 30, 26, 2, 'q'); R(x + 9, y + 32, 1, 3, 'a'); R(x + 32, y + 32, 1, 3, 'a');
+  // bus stop sign
+  R(x + 44, y + 12, 1, 26, 'n');
+  O(x + 39, y + 2, 11, 11, 'c'); R(x + 40, y + 3, 9, 9, 'm'); R(x + 39, y + 5, 13, 5, 'j'); micro('BUS', x + 40, y + 5, 'm');
+  // timetable board
+  O(x + 52, y + 12, 16, 22, 'a'); R(x + 53, y + 13, 14, 2, 'e');
+  for (let k = 0; k < 5; k++) { R(x + 54, y + 17 + k * 3, 5, 1, 'm'); R(x + 61, y + 17 + k * 3, 4, 1, (Math.floor(t / 700) + k) % 5 === 0 ? 'e' : 'f'); }
+  R(x + 59, y + 34, 2, 4, 'o');
+  // a bus pulling in
+  const T = t % 12000; let bx = null;
+  if (T < 3000) { const p = T / 3000; bx = x + 74 - (1 - (1 - p) * (1 - p)) * 58; }
+  else if (T < 8000) bx = x + 16;
+  else if (T < 11000) { const q = (T - 8000) / 3000; bx = x + 16 - q * q * 60; }
+  if (bx !== null && bx > x - 24 && bx < x + 72) { SP('bus', Math.round(bx), y + 42 - (Math.floor(t / 200) % 2 && (T < 3000 || T > 8000) ? 1 : 0), { X: 'g' }); if (T >= 3000 && T < 8000) R(Math.round(bx) + 3, y + 44, 2, 5, 'p'); }
+  // row of taxis
+  for (let k = 0; k < 4; k++) SP('taxi', x + 2 + k * 17, y + 55);
+};
+
+BLD.construction = (x, y, t) => {
+  R(x, y + 44, 63, 64, 'r'); dither(x, y + 44, 63, 64, 'q', G);
+  // half-built frame + scaffolding
+  for (let f = 0; f < 4; f++) {
+    const fy = y + 100 - (f + 1) * 14;
+    R(x + 3, fy, 32, 2, 'o'); if (f < 2) { bricks(x + 4, fy + 2, 30, 12, 'd', 'c'); win(x + 10, fy + 4, 6, 7, 'a', 'p'); win(x + 22, fy + 4, 6, 7, 'a', 'p'); }
+  }
+  [3, 18, 33].forEach(cx => R(x + cx, y + 44, 2, 56, 'o'));
+  for (let k = 0; k < 3; k++) line(x + 5 + 0, y + 58 - k * 0, x + 17, y + 44 + 0, 'n');
+  R(x + 37, y + 50, 1, 50, 'e'); R(x + 41, y + 50, 1, 50, 'e');
+  for (let f = 0; f < 4; f++) R(x + 35, y + 56 + f * 12, 8, 1, 'q');
+  line(x + 37, y + 56, x + 41, y + 68, 'd'); line(x + 41, y + 68, x + 37, y + 80, 'd');
+  // crane with swinging hook
+  const mx = x + 48;
+  R(mx, y + 6, 5, 94, 'a'); R(mx + 1, y + 6, 3, 94, 'e');
+  for (let k = 0; k < 92; k += 4) { X(mx + 1 + ((k / 4) % 2) * 2, y + 7 + k, 'd'); X(mx + 2, y + 9 + k, 'd'); }
+  R(x + 4, y + 3, 58, 4, 'a'); R(x + 5, y + 4, 56, 2, 'e'); for (let k = 0; k < 56; k += 3) X(x + 5 + k, y + 4 + (k / 3) % 2, 'd');
+  R(mx - 2, y - 2, 9, 6, 'a'); R(mx - 1, y - 1, 7, 4, 'e'); X(mx + 3, y, 'l'); X(mx + 4, y, 'l');
+  O(x + 56, y + 6, 6, 5, 'o');
+  line(mx + 2, y - 4, x + 8, y + 3, 'o'); line(mx + 2, y - 4, x + 60, y + 3, 'o'); X(mx + 2, y - 5, blinkOn(t, 500) ? 'c' : 'b');
+  const trol = x + 10 + Math.round(tri(t, 10000) * 30);
+  const sw = [0, 1, 1, 0, -1, -1][Math.floor(t / 250) % 6];
+  const len = 18 + Math.round(tri(t, 7000) * 10);
+  R(trol - 1, y + 6, 4, 2, 'p');
+  line(trol + 1, y + 8, trol + 1 + sw, y + 8 + len, 'a');
+  R(trol + sw, y + 8 + len, 3, 2, 'o'); X(trol + 1 + sw, y + 10 + len, 'o'); X(trol + 2 + sw, y + 11 + len, 'o');
+  R(trol - 5 + sw, y + 12 + len, 13, 2, 'c'); R(trol - 5 + sw, y + 12 + len, 13, 1, 'd');
+  // sand pile, mixer, cones
+  for (let i = 0; i < 7; i++) R(x + 53 - i, y + 94 + i, 4 + i * 2, 1, i % 3 ? 'e' : 'd');
+  SP('mixer', x + 24, y + 90);
+  const drum = Math.floor(t / 200) % 3; X(x + 29 + drum, y + 92, 'p'); X(x + 30 + drum, y + 93, 'p');
+  SP('cone', x + 2, y + 100); SP('cone', x + 12, y + 101); SP('cone', x + 42, y + 101);
+};
+
+BLD.harbour = (x, y, t) => {
+  pave(x, y + 0, 108, 86);
+  for (let k = 0; k < 108; k += 12) R(x + k, y + 84, 2, 2, 'p');
+  // warehouse with fish sign
+  R(x + 3, y + 12, 44, 5, 'a'); R(x + 4, y + 13, 42, 2, 'c'); R(x + 3, y + 15, 44, 2, 'b');
+  O(x + 4, y + 17, 42, 30, 'r'); for (let k = 0; k < 42; k += 3) R(x + 5 + k, y + 18, 1, 28, 'q');
+  O(x + 14, y + 26, 20, 21, 'p'); R(x + 15, y + 27, 18, 2, 'o');
+  O(x + 13, y + 2, 22, 11, 'j'); SP2('fish', x + 17, y + 3, 2);
+  // fish crates on the quay
+  for (let k = 0; k < 3; k++) { SP('crate', x + 52 + k * 8, y + 60 + (k % 2) * 4); X(x + 54 + k * 8, y + 60 + (k % 2) * 4, 'k'); X(x + 56 + k * 8, y + 60 + (k % 2) * 4, 'n'); }
+  R(x + 76, y + 62, 3, 4, 'a'); R(x + 90, y + 62, 3, 4, 'a');
+  R(x + 6, y + 60, 8, 5, 'e'); R(x + 7, y + 61, 6, 3, 'd'); X(x + 9, y + 62, 'e');
+  // wooden pier
+  R(x + 40, y + 84, 13, 44, 'q'); for (let k = 0; k < 44; k += 3) R(x + 41, y + 85 + k, 11, 2, 'r');
+  for (let k = 4; k < 44; k += 12) { R(x + 39, y + 84 + k, 2, 4, 'a'); R(x + 52, y + 84 + k, 2, 4, 'a'); }
+  // bobbing fishing boat
+  const bob = Math.floor(t / 600) % 2;
+  SP('boat', x + 55, y + 100 + bob);
+  R(x + 53, y + 105 + bob, 3, 1, 'n');
+  // lighthouse on a rock with a rotating beam
+  const lx = x + 118, ly = y + 12;
+  R(lx - 8, ly + 52, 22, 7, 'o'); R(lx - 6, ly + 50, 18, 4, 'n'); R(lx - 9, ly + 57, 24, 2, 'p');
+  for (let i = 0; i < 44; i++) { const hw = 3 + Math.floor(i / 11); R(lx + 3 - hw - 1, ly + 8 + i, hw * 2 + 2, 1, 'a'); R(lx + 3 - hw, ly + 8 + i, hw * 2, 1, Math.floor(i / 7) % 2 ? 'm' : 'c'); }
+  R(lx - 2, ly + 1, 10, 8, 'a'); R(lx - 1, ly + 3, 8, 5, 'e'); R(lx - 2, ly - 1, 10, 3, 'c'); X(lx + 3, ly - 2, 'a');
+  R(lx - 3, ly + 8, 12, 1, 'a');
+  const ph = Math.floor(t / 250) % 8;
+  if (ph < 3) { for (let k = 0; k < 14; k++) { X(lx - 3 - k, ly + 5 - Math.floor(k / 3) + ph, 'e'); if (k < 10) X(lx - 3 - k, ly + 5 + Math.floor(k / 3) + ph - 1, 'e'); } }
+  else if (ph >= 4 && ph < 7) { for (let k = 0; k < 12; k++) { X(lx + 9 + k, ly + 5 - Math.floor(k / 3) + (ph - 4), 'e'); if (k < 9) X(lx + 9 + k, ly + 5 + Math.floor(k / 3) + (ph - 4) - 1, 'e'); } }
+  else { R(lx, ly + 4, 6, 3, 'm'); }
+  // seagulls
+  for (let g = 0; g < 3; g++) {
+    const a = t / (2500 + g * 400) + g * 2.1;
+    const gx = x + 80 + g * 12 + Math.round(Math.cos(a) * 14), gy = y + 70 + g * 10 + Math.round(Math.sin(a) * 6);
+    SP(Math.floor(t / 200 + g) % 2 ? 'gull0' : 'gull1', gx, gy);
+  }
+};
+
+/* =====================================================================
+   PLACE INTERIORS (drawn full screen; the wall meets the floor at y=104)
+   ===================================================================== */
+const ROOM = {};
+function wallBG(c, trim, pattern) {
+  R(0, 22, 320, 82, c);
+  if (pattern) for (let y = 24; y < 100; y += 6) for (let x = (y / 6) % 2 ? 3 : 0; x < 320; x += 6) X(x, y, pattern);
+  R(0, 98, 320, 6, trim); R(0, 98, 320, 1, 'a');
+}
+function floorTiles(c1, c2) { for (let y = 104; y < 200; y += 8) for (let x = 0; x < 320; x += 8) R(x, y, 8, 8, ((x + y) / 8) % 2 ? c1 : c2); R(0, 104, 320, 1, 'a'); }
+function floorWood(c1, c2) { R(0, 104, 320, 96, c1); for (let y = 108; y < 200; y += 5) { R(0, y, 320, 1, c2); for (let x = (y * 7) % 40; x < 320; x += 40) R(x, y - 4, 1, 4, c2); } R(0, 104, 320, 1, 'a'); }
+function skyBG(t, ground) {
+  R(0, 22, 320, 30, 'k'); R(0, 52, 320, 30, 'l'); dither(0, 50, 320, 4, 'k', G);
+  const cx = Math.floor(t / 250) % 360;
+  [[20, 34], [140, 28], [250, 40]].forEach(([x0, y0], i) => { const x = ((x0 + cx + i * 30) % 360) - 30; R(x, y0, 22, 4, 'm'); R(x + 4, y0 - 3, 12, 3, 'm'); R(x + 2, y0 + 4, 18, 1, 'n'); });
+  if (ground) { R(0, 80, 320, 24, ground); }
+}
+function grassFloor() { R(0, 104, 320, 96, 'g'); for (let i = 0; i < 400; i++) X((i * 73) % 320, 104 + (i * 37) % 96, i % 3 ? 'f' : 'h'); R(0, 104, 320, 1, 'h'); }
+function wWin(x, y, w, h, t) { O(x, y, w, h, 'm'); R(x + 2, y + 2, w - 4, h - 4, 'k'); R(x + 2, y + 2 + ((h - 4) >> 1), w - 4, (h - 4) >> 1, 'l'); R(x + (w >> 1), y, 1, h, 'm'); R(x, y + (h >> 1), w, 1, 'm'); X(x + 3, y + 3, 'm'); }
+function clockR(x, y, t) { O(x, y, 13, 13, 'm'); R(x + 6, y + 3, 1, 4, 'a'); const s = Math.floor(t / 1000) % 4; const d = [[0, -1], [1, 0], [0, 1], [-1, 0]][s]; line(x + 6, y + 6, x + 6 + d[0] * 4, y + 6 + d[1] * 4, 'c'); R(x + 6, y + 6, 2, 1, 'a'); }
+function plant(x, y) { R(x + 1, y + 10, 8, 8, 'r'); R(x, y + 10, 10, 2, 'q'); R(x + 3, y, 4, 10, 'g'); R(x, y + 2, 4, 5, 'g'); R(x + 6, y + 1, 4, 6, 'g'); X(x + 4, y + 1, 'f'); X(x + 1, y + 3, 'f'); X(x + 8, y + 3, 'h'); }
+function shelfRow(x, y, w, colors, h) { R(x, y + (h || 8), w, 2, 'q'); for (let i = 0, k = 0; i < w - 2; i += 3, k++) R(x + 1 + i, y + (k % 3 === 0 ? 1 : 2), 2, (h || 8) - (k % 3 === 0 ? 1 : 2), colors[k % colors.length]); }
+function table(x, y, w, top, leg) { R(x, y, w, 3, 'a'); R(x + 1, y, w - 2, 2, top); R(x + 2, y + 3, 2, 14, leg || 'q'); R(x + w - 4, y + 3, 2, 14, leg || 'q'); }
+function poster(x, y, w, h, c) { O(x, y, w, h, 'm'); R(x + 2, y + 2, w - 4, h - 4, c); }
+
+ROOM.hospital = t => {
+  wallBG('l', 'k', 'm'); floorTiles('m', 'n');
+  R(0, 60, 320, 3, 'm');
+  // medicine cabinet with a red cross
+  O(250, 34, 50, 44, 'm'); R(252, 36, 46, 40, 'l'); R(270, 28, 10, 8, 'm'); R(273, 29, 4, 6, 'c'); R(271, 31, 8, 2, 'c');
+  for (let s = 0; s < 3; s++) { R(252, 48 + s * 12, 46, 1, 'n'); for (let b = 0; b < 7; b++) R(255 + b * 6, 40 + s * 12, 3, 7 - (b % 2) * 2, ['c', 'j', 'e', 'g', 'b', 'd', 'm'][(b + s) % 7]); }
+  // hospital bed
+  R(10, 88, 70, 6, 'n'); R(8, 72, 4, 40, 'o'); R(78, 80, 4, 32, 'o'); R(10, 84, 68, 8, 'm'); R(40, 82, 38, 10, 'j'); R(40, 82, 38, 2, 'k'); R(12, 80, 20, 6, 'm'); R(12, 85, 20, 1, 'n');
+  R(12, 94, 2, 12, 'o'); R(74, 94, 2, 12, 'o'); X(12, 106, 'a'); X(74, 106, 'a');
+  // heart monitor with a live heartbeat
+  O(86, 44, 34, 24, 'p'); R(88, 46, 30, 20, 'a'); R(101, 68, 3, 36, 'o'); R(95, 102, 15, 2, 'o');
+  const off = Math.floor(t / 60) % 30;
+  for (let i = 0; i < 30; i++) { const k = (i + off) % 30; const h = k === 10 ? -7 : (k === 11 ? 5 : (k === 12 ? -2 : 0)); X(88 + i, 56 + h, 'f'); if (h) line(88 + i, 56, 88 + i, 56 + h, 'f'); }
+  micro(String(70 + (Math.floor(t / 1000) % 5)), 108, 47, 'g');
+  // drip stand
+  R(134, 36, 1, 66, 'n'); R(130, 36, 9, 1, 'n'); O(131, 38, 7, 10, 'm'); R(132, 42, 5, 5, 'k'); R(129, 102, 11, 2, 'n');
+};
+
+ROOM.pharmacy = t => {
+  wallBG('f', 'g', 'g'); floorTiles('m', 'n');
+  const cols = ['c', 'j', 'e', 'b', 'd', 'k', 'm', 'g'];
+  for (let s = 0; s < 4; s++) { R(10, 34 + s * 16, 300, 2, 'q'); for (let b = 0; b < 60; b++) { if (b > 18 && b < 26) continue; const hh = 6 + (b * 3) % 5; R(12 + b * 5, 34 + s * 16 - hh, 4, hh, cols[(b + s * 3) % 8]); X(12 + b * 5, 34 + s * 16 - hh, 'm'); } }
+  // blinking green cross
+  O(106, 24, 36, 34, 'p'); const on = blinkOn(t, 500);
+  R(118, 28, 12, 26, on ? 'f' : 'g'); R(110, 35, 28, 12, on ? 'f' : 'g');
+  // counter with a cash register
+  R(0, 96, 320, 2, 'a'); R(180, 76, 140, 26, 'g'); R(180, 76, 140, 3, 'm'); R(180, 76, 1, 26, 'a');
+  O(270, 62, 30, 15, 'o'); R(273, 65, 14, 5, 'f'); R(290, 65, 8, 8, 'n');
+  // pill jars and scale
+  O(200, 64, 12, 13, 'm'); R(201, 64, 10, 3, 'c'); O(216, 66, 10, 11, 'm'); R(217, 66, 8, 3, 'j');
+};
+
+ROOM.dentist = t => {
+  wallBG('l', 'j'); floorTiles('m', 'l');
+  // giant tooth poster
+  O(214, 30, 40, 44, 'm'); R(216, 32, 36, 40, 'k'); SP2('i_tooth', 222, 37, 2);
+  // lamp over the chair
+  R(96, 22, 2, 12, 'o'); R(84, 34, 26, 6, 'a'); R(86, 35, 22, 3, 'e'); if (blinkOn(t, 2000)) R(88, 40, 18, 1, 'e');
+  // dentist chair
+  R(30, 70, 14, 20, 'j'); R(30, 70, 14, 2, 'k'); R(40, 84, 50, 8, 'j'); R(40, 84, 50, 2, 'k'); R(86, 90, 16, 5, 'j');
+  R(58, 92, 10, 12, 'o'); R(48, 102, 30, 3, 'o');
+  // tool tray and sink
+  R(120, 66, 4, 38, 'n'); O(106, 62, 32, 6, 'm'); for (let k = 0; k < 5; k++) R(109 + k * 5, 58, 1, 5, 'n');
+  O(270, 70, 34, 16, 'm'); R(273, 72, 28, 5, 'k'); R(285, 60, 2, 11, 'n'); R(285, 60, 8, 2, 'n'); R(282, 86, 10, 18, 'm');
+  // toothbrush cup
+  R(274, 58, 6, 8, 'j'); R(275, 52, 1, 6, 'c'); R(278, 52, 1, 6, 'g'); X(275, 51, 'm'); X(278, 51, 'm');
+};
+
+ROOM.school = t => {
+  wallBG('e', 'q', 'd'); floorWood('r', 'q');
+  // chalkboard
+  O(60, 30, 150, 56, 'q'); R(63, 33, 144, 50, 'h');
+  microBig('ABC', 72, 40, 'm', 3);
+  micro('1+1=2', 150, 42, 'm'); R(150, 42 + 2, 3, 1, 'h');
+  microBig('A', 150, 56, 'e', 2); micro('APPLE', 162, 60, 'm');
+  R(66, 84, 138, 3, 'q'); R(90, 83, 6, 2, 'm'); R(110, 83, 4, 2, 'e');
+  // alphabet banner and clock
+  for (let k = 0; k < 8; k++) { O(8 + k * 6, 26, 6, 8, ['c', 'j', 'g', 'e'][k % 4]); }
+  clockR(240, 30, t);
+  // globe on a desk + pupils' desks
+  table(230, 80, 60, 'r'); R(254, 70, 12, 10, 'j'); R(256, 72, 5, 4, 'g'); R(261, 76, 3, 2, 'g'); R(259, 80, 2, 2, 'n');
+  [[14, 130], [206, 130], [262, 130]].forEach(([dx, dy]) => { R(dx, dy - 20, 40, 4, 'a'); R(dx + 1, dy - 20, 38, 3, 'r'); R(dx + 3, dy - 16, 3, 14, 'q'); R(dx + 34, dy - 16, 3, 14, 'q'); R(dx + 10, dy - 22, 10, 2, 'm'); });
+};
+
+ROOM.tv = t => {
+  wallBG('p', 'a', 'o'); floorTiles('p', 'o');
+  // studio lights
+  for (let k = 0; k < 5; k++) { R(20 + k * 64, 22, 2, 6, 'o'); O(14 + k * 64, 28, 14, 8, 'a'); R(16 + k * 64, 34, 10, 2, blinkOn(t + k * 200, 1500) ? 'e' : 'd'); }
+  // big blue screen with a world map
+  O(40, 40, 110, 50, 'i'); R(43, 43, 104, 44, 'j');
+  R(55, 50, 20, 12, 'g'); R(62, 62, 10, 16, 'g'); R(90, 48, 30, 14, 'g'); R(98, 62, 12, 14, 'g'); R(125, 64, 14, 8, 'g');
+  const sc = Math.floor(t / 40) % 104; R(43 + sc, 43, 2, 44, 'k');
+  // news desk
+  O(170, 80, 110, 24, 'c'); R(172, 82, 106, 3, 'd'); micro('NEWS', 212, 90, 'm');
+  // ON AIR light
+  const on = blinkOn(t, 700);
+  O(250, 28, 40, 12, on ? 'c' : 'b'); micro('ON AIR', 256, 31, on ? 'e' : 'c');
+  // camera on a tripod
+  O(292, 60, 24, 16, 'a'); R(294, 62, 18, 12, 'o'); R(286, 65, 7, 6, 'p'); X(296, 64, 'c'); line(304, 76, 296, 104, 'n'); line(304, 76, 312, 104, 'n'); R(303, 76, 2, 28, 'n');
+};
+
+ROOM.lab = t => {
+  wallBG('m', 'n', 'l'); floorTiles('m', 'l');
+  // formula board
+  O(30, 30, 80, 40, 'n'); R(32, 32, 76, 36, 'm'); micro('H2O', 40, 38, 'j'); micro('E=MC2', 40, 50, 'c'); line(80, 36, 96, 60, 'g'); line(96, 36, 80, 60, 'g');
+  // tanks of glowing liquid
+  for (let k = 0; k < 2; k++) {
+    const x = 220 + k * 40; O(x, 36, 26, 60, 'n'); R(x + 2, 44, 22, 50, (Math.floor(t / 400) + k) % 2 ? 'f' : 'g');
+    for (let b = 0; b < 4; b++) { const by = 92 - ((Math.floor(t / 90) + b * 11 + k * 5) % 46); X(x + 5 + b * 5, by, 'm'); }
+  }
+  // lab bench with flasks & microscope
+  R(0, 80, 200, 4, 'a'); R(1, 80, 198, 3, 'o'); R(10, 84, 180, 20, 'n'); for (let k = 0; k < 4; k++) R(12 + k * 45, 88, 40, 14, 'o');
+  const f = Math.floor(t / 150);
+  [[20, 'f'], [40, 'c'], [60, 'j']].forEach(([x, c], i) => { R(x + 3, 62, 4, 6, 'l'); R(x, 68, 10, 12, 'l'); R(x + 1, 72, 8, 8, c); for (let b = 0; b < 3; b++) { const a = (f + b * 3 + i) % 9; X(x + 3 + ((b + a) % 4), 70 - a, c); } });
+  R(150, 62, 6, 4, 'p'); R(152, 58, 4, 18, 'p'); R(146, 76, 16, 4, 'p'); R(158, 66, 3, 10, 'o'); X(153, 57, 'l');
+};
+
+ROOM.police = t => {
+  wallBG('j', 'i', 'k'); floorTiles('n', 'o');
+  // map with pins and wanted posters
+  O(20, 30, 70, 44, 'm'); R(22, 32, 66, 40, 'f'); line(22, 50, 88, 46, 'e'); line(50, 32, 56, 72, 'e'); X(40, 44, 'c'); X(70, 58, 'c'); X(60, 38, 'j');
+  poster(100, 32, 24, 30, 'e'); R(106, 38, 12, 12, 'r'); micro('WANTED', 100, 26, 'm'); R(106, 52, 12, 2, 'a');
+  // blue lamp
+  R(140, 22, 2, 8, 'o'); O(134, 30, 14, 10, blinkOn(t, 800) ? 'l' : 'k');
+  // desk with computer and phone
+  table(150, 78, 80, 'q', 'q'); O(170, 58, 26, 20, 'p'); R(172, 60, 22, 14, 'j'); R(174, 62, 12, 1, 'l'); R(174, 65, 16, 1, 'l'); R(180, 78, 6, 2, 'p');
+  R(210, 72, 10, 6, 'a'); R(211, 71, 8, 2, 'c');
+  // cell bars
+  R(250, 22, 70, 82, 'p'); for (let k = 0; k < 70; k += 7) R(252 + k, 24, 2, 80, 'n'); R(250, 40, 70, 2, 'n'); R(250, 80, 70, 2, 'n');
+};
+
+ROOM.fire = t => {
+  bricks(0, 22, 320, 82, 'c', 'b'); R(0, 98, 320, 6, 'o'); floorTiles('o', 'n');
+  // fire pole
+  R(160, 22, 3, 82, 'e'); R(161, 22, 1, 82, 'm'); R(152, 100, 20, 4, 'a');
+  // helmets and jackets on hooks
+  for (let k = 0; k < 3; k++) { const x = 20 + k * 36; R(x + 10, 36, 4, 2, 'n'); R(x, 40, 24, 36, 'e'); R(x + 2, 40, 20, 34, 'd'); R(x + 2, 60, 20, 3, 'e'); R(x + 11, 40, 2, 34, 'a'); R(x + 2, 26, 20, 8, 'c'); R(x, 32, 24, 3, 'c'); R(x + 9, 27, 6, 5, 'e'); }
+  // coiled hose rack
+  O(190, 40, 44, 44, 'o'); for (let r = 18; r > 4; r -= 4) { for (let a = 0; a < 40; a++) X(212 + Math.round(Math.cos(a / 6.4) * r), 62 + Math.round(Math.sin(a / 6.4) * r), 'c'); } R(210, 60, 4, 4, 'e');
+  // alarm bell
+  const ring = Math.floor(t / 120) % 20 < 4 ? (Math.floor(t / 60) % 2 ? 1 : -1) : 0;
+  O(260 + ring, 32, 20, 18, 'c'); R(266 + ring, 38, 8, 6, 'd'); R(268, 50, 4, 4, 'o');
+  // fire truck side
+  R(240, 70, 80, 30, 'c'); R(240, 70, 80, 3, 'd'); R(250, 76, 30, 10, 'l'); R(284, 66, 36, 4, 'n'); for (let k = 0; k < 36; k += 4) R(284 + k, 64, 1, 6, 'n');
+  R(254, 96, 14, 8, 'a'); R(300, 96, 14, 8, 'a'); R(258, 98, 6, 4, 'n'); R(304, 98, 6, 4, 'n'); R(240, 88, 80, 2, 'e');
+};
+
+ROOM.library = t => {
+  wallBG('q', 'a', 'r'); floorWood('r', 'q');
+  const cols = ['c', 'e', 'j', 'g', 'd', 'b', 'k', 'm', 'h'];
+  [[4, 80], [236, 80]].forEach(([sx, sw]) => {
+    O(sx, 26, sw, 78, 'q');
+    for (let s = 0; s < 5; s++) { const y = 30 + s * 15; R(sx + 2, y + 12, sw - 4, 2, 'a'); for (let b = 0; b < (sw - 6) / 3; b++) { const h = 8 + (b * 7 + s) % 4; R(sx + 3 + b * 3, y + 12 - h, 2, h, cols[(b * 5 + s * 2 + sx) % 9]); } }
+  });
+  // ladder
+  line(90, 26, 96, 104, 'e'); line(98, 26, 104, 104, 'e'); for (let k = 0; k < 8; k++) R(91 + k * 0.75, 32 + k * 9, 8, 1, 'e');
+  // reading table, lamp, open book
+  table(140, 82, 70, 'r'); R(186, 62, 2, 20, 'e'); R(180, 58, 14, 6, 'g'); R(182, 64, 10, 1, 'e');
+  R(150, 78, 12, 4, 'm'); R(156, 78, 1, 4, 'n'); R(166, 76, 12, 6, 'c'); R(166, 74, 12, 2, 'j');
+  // SHH sign
+  O(130, 30, 30, 12, 'm'); micro('SHH', 136, 33, 'c');
+  if (Math.floor(t / 3000) % 2) { R(152, 64 + Math.floor(t / 400) % 3, 1, 1, 'm'); }
+};
+
+ROOM.bank = t => {
+  wallBG('m', 'n', 'n'); floorTiles('m', 'n');
+  [0, 110, 210, 300].forEach(x => { R(x, 22, 16, 82, 'n'); R(x + 3, 22, 2, 82, 'm'); R(x + 10, 22, 2, 82, 'm'); });
+  // round vault door
+  const vx = 250, vy = 60;
+  for (let dy = -30; dy <= 30; dy++) { const hw = Math.round(Math.sqrt(900 - dy * dy)); R(vx - hw, vy + dy, hw * 2, 1, Math.abs(dy) > 26 || hw > 26 ? 'o' : 'n'); }
+  R(vx - 3, vy - 3, 6, 6, 'e');
+  const a = Math.floor(t / 300) % 8 * Math.PI / 4;
+  for (let k = 0; k < 4; k++) { const b = a + k * Math.PI / 2; line(vx, vy, vx + Math.round(Math.cos(b) * 14), vy + Math.round(Math.sin(b) * 14), 'e'); }
+  for (let k = 0; k < 12; k++) { const b = k * Math.PI / 6; X(vx + Math.round(Math.cos(b) * 24), vy + Math.round(Math.sin(b) * 24), 'p'); }
+  // counter with glass windows
+  R(20, 72, 180, 32, 'q'); R(20, 72, 180, 3, 'r'); R(20, 44, 180, 2, 'e'); for (let k = 0; k < 4; k++) { R(22 + k * 45, 46, 40, 26, 'l'); X(24 + k * 45, 48, 'm'); } R(20, 46, 2, 26, 'e'); R(198, 46, 2, 26, 'e');
+  // money bags & coin stacks
+  R(40, 86, 16, 18, 'r'); R(44, 82, 8, 5, 'r'); R(46, 92, 4, 6, 'e');
+  for (let k = 0; k < 4; k++) R(70 + k * 8, 104 - (k + 2) * 3, 6, (k + 2) * 3, 'e'); for (let k = 0; k < 4; k++) for (let j = 0; j < (k + 2); j++) R(70 + k * 8, 104 - j * 3 - 1, 6, 1, 'd');
+  clockR(150, 26, t);
+};
+
+ROOM.theatre = t => {
+  R(0, 22, 320, 82, 'a'); floorWood('q', 'r');
+  // spotlight cone
+  const sx = 100 + Math.round(Math.sin(t / 1500) * 20);
+  for (let y = 22; y < 104; y++) { const w = (y - 22) * 0.6; for (let x = Math.floor(sx - w); x < sx + w; x += 2) X(x + (y % 2), y, 'p'); }
+  R(sx - 30, 104, 60, 6, 'd'); dither(sx - 30, 104, 60, 6, 'r', G);
+  // red curtains that sway
+  const sway = Math.floor(t / 700) % 2;
+  for (let k = 0; k < 8; k++) { R(k * 8, 22, 7 - (k === 7 ? sway : 0), 82 - k * 3, k % 2 ? 'c' : 'b'); R(312 - k * 8 + (k === 7 ? sway : 0), 22, 7, 82 - k * 3, k % 2 ? 'c' : 'b'); }
+  R(0, 22, 320, 12, 'c'); for (let k = 0; k < 320; k += 10) R(k, 34, 6, 3, 'c'); R(0, 22, 320, 2, 'e'); for (let k = 0; k < 320; k += 10) X(k + 3, 37, 'e');
+  // masks sign
+  SP2('i_masks', 142, 40, 3);
+  // footlights
+  for (let k = 0; k < 16; k++) { R(10 + k * 20, 100, 8, 4, 'o'); X(13 + k * 20, 100, blinkOn(t + k * 100, 400) ? 'e' : 'm'); }
+};
+
+ROOM.hotel = t => {
+  wallBG('b', 'e', 'c'); floorTiles('c', 'b');
+  // three world clocks
+  ['LONDON', 'TOKYO', 'NEW YORK'].forEach((c, i) => { clockR(40 + i * 44, 28, t + i * 5000); micro(c.split(' ')[0], 40 + i * 44 - 4, 43, 'e'); });
+  // key board
+  O(190, 28, 60, 40, 'q'); for (let r = 0; r < 3; r++) for (let k = 0; k < 6; k++) { X(195 + k * 9, 32 + r * 12, 'e'); R(195 + k * 9, 33 + r * 12, 1, 4, 'e'); R(194 + k * 9, 37 + r * 12, 3, 2, 'e'); }
+  // reception desk with a bell
+  R(160, 74, 150, 30, 'q'); R(160, 74, 150, 4, 'e'); for (let k = 0; k < 150; k += 15) R(162 + k, 80, 10, 20, 'r');
+  const ding = Math.floor(t / 2500) % 4 === 0 ? 1 : 0;
+  R(260, 68 - ding, 10, 5, 'e'); R(264, 66 - ding, 2, 2, 'e'); R(258, 73, 14, 1, 'o');
+  R(220, 66, 22, 8, 'a'); R(222, 66, 18, 6, 'p');
+  // luggage trolley & plant
+  R(20, 70, 2, 34, 'e'); R(60, 70, 2, 34, 'e'); R(20, 68, 42, 2, 'e'); R(20, 100, 42, 2, 'e'); R(24, 80, 16, 20, 'c'); R(42, 86, 14, 14, 'j'); R(28, 76, 8, 4, 'c');
+  plant(290, 44); plant(130, 86);
+};
+
+ROOM.salon = t => {
+  wallBG('s', 'b'); for (let k = 0; k < 320; k += 16) R(k, 22, 8, 76, 'm'); floorTiles('m', 'a');
+  // mirrors with lights
+  [180, 250].forEach(mx => { O(mx, 32, 50, 44, 'e'); R(mx + 3, 35, 44, 38, 'l'); line(mx + 10, 40, mx + 20, 50, 'm'); for (let k = 0; k < 5; k++) X(mx + 5 + k * 10, 33, blinkOn(t + k * 150, 500) ? 'm' : 'e'); });
+  // salon chair
+  R(200, 72, 14, 18, 'c'); R(196, 86, 22, 6, 'c'); R(205, 92, 4, 8, 'n'); R(198, 100, 18, 3, 'n');
+  // hair dryer hood
+  R(20, 30, 36, 14, 'a'); R(22, 32, 32, 10, 'b'); R(36, 44, 4, 30, 'n'); R(24, 74, 28, 6, 'b'); R(34, 80, 8, 24, 'n');
+  // shelf of bottles
+  R(70, 44, 60, 2, 'q'); for (let k = 0; k < 10; k++) R(72 + k * 6, 36 - (k % 3), 4, 8 + (k % 3), ['c', 'k', 'e', 'b', 'f'][k % 5]);
+  // hair clippings on the floor
+  for (let k = 0; k < 12; k++) X(190 + (k * 7) % 40, 108 + (k * 3) % 8, ['q', 'e', 'a'][k % 3]);
+};
+
+ROOM.supermarket = t => {
+  wallBG('m', 'g'); R(0, 22, 320, 10, 'g'); micro('FRESH FOOD', 130, 25, 'm'); floorTiles('m', 'n');
+  const cols = ['c', 'e', 'j', 'd', 'g', 'b', 'k', 'f'];
+  [[4, 90], [226, 90]].forEach(([sx, sw]) => { O(sx, 34, sw, 70, 'n'); for (let s = 0; s < 4; s++) { R(sx + 2, 48 + s * 16, sw - 4, 2, 'o'); for (let b = 0; b < (sw - 6) / 6; b++) R(sx + 3 + b * 6, 38 + s * 16, 5, 10, cols[(b + s * 3) % 8]); } });
+  // checkout: conveyor belt and register
+  R(110, 80, 100, 24, 'o'); R(110, 78, 100, 4, 'p');
+  const bo = Math.floor(t / 100) % 6; for (let k = 0; k < 100; k += 6) X(110 + ((k + bo) % 100), 79, 'n');
+  const item = Math.floor(t / 60) % 110; R(110 + (item % 90), 72, 8, 6, 'c'); R(110 + ((item + 45) % 90), 73, 6, 5, 'e');
+  O(182, 58, 26, 20, 'p'); R(185, 61, 20, 6, 'f'); micro(String(1 + Math.floor(t / 2000) % 9) + '.50', 186, 62, 'h');
+  // fruit crates
+  for (let k = 0; k < 3; k++) { R(120 + k * 28, 96, 24, 8, 'r'); for (let i = 0; i < 5; i++) R(122 + k * 28 + i * 4, 92, 3, 4, ['c', 'e', 'f'][k]); }
+};
+
+ROOM.bakery = t => {
+  wallBG('s', 'r', 'e'); floorTiles('d', 'e');
+  // brick oven with a glowing fire
+  bricks(8, 30, 90, 74, 'c', 'b'); R(8, 30, 90, 4, 'b'); R(30, 22, 20, 10, 'c');
+  R(24, 58, 58, 34, 'a');
+  for (let i = 0; i < 12; i++) R(26 + i, 58 - i, 54 - i * 2, 1, 'a');
+  const fl = Math.floor(t / 120);
+  for (let k = 0; k < 9; k++) { const h = 6 + ((fl + k * 3) % 5) * 2; R(30 + k * 5, 90 - h, 4, h, (fl + k) % 3 ? 'd' : 'c'); R(31 + k * 5, 90 - h + 3, 2, h - 3, 'e'); }
+  R(26, 90, 54, 2, 'q');
+  // bread shelves
+  O(120, 30, 110, 60, 'q'); for (let s = 0; s < 3; s++) { R(122, 46 + s * 16, 106, 2, 'a'); for (let b = 0; b < 7; b++) { const bx = 124 + b * 15; if (s === 1) { R(bx, 40 + s * 16, 13, 4, 'r'); R(bx + 2, 40 + s * 16, 9, 1, 'e'); } else { R(bx + 1, 38 + s * 16, 11, 7, 'r'); R(bx + 2, 39 + s * 16, 2, 5, 'e'); R(bx + 6, 39 + s * 16, 2, 5, 'e'); } } }
+  // flour sacks
+  [[250, 80], [276, 84], [262, 66]].forEach(([x, y]) => { O(x, y, 24, 22, 'm'); R(x + 8, y - 3, 8, 4, 'm'); micro('FLOUR', x + 1, y + 8, 'r'); });
+  // cake on the counter
+  R(130, 100, 70, 4, 'q'); R(150, 88, 24, 12, 'm'); R(150, 92, 24, 2, 'c'); R(150, 88, 24, 2, 'e'); X(161, 86, 'c'); X(162, 85, 'g');
+};
+
+ROOM.restaurant = t => {
+  wallBG('m', 'c'); for (let y = 22; y < 60; y += 6) for (let x = 0; x < 320; x += 6) R(x + ((y / 6) % 2) * 3, y, 3, 3, 'n'); floorTiles('m', 'a');
+  // stove with steaming pots
+  R(200, 64, 110, 40, 'n'); R(200, 64, 110, 3, 'o'); R(210, 74, 30, 20, 'a'); R(250, 74, 30, 20, 'a'); for (let k = 0; k < 4; k++) X(220 + k * 10, 70, 'c');
+  [[212, 'o'], [262, 'p']].forEach(([x, c], i) => { R(x, 52, 26, 12, c); R(x - 2, 52, 30, 2, 'n'); R(x + 26, 56, 8, 2, 'q'); smoke(x + 10, 50, t + i * 700, 4); });
+  // menu board
+  O(110, 28, 60, 40, 'q'); R(113, 31, 54, 34, 'a'); micro('MENU', 124, 34, 'e'); for (let k = 0; k < 4; k++) { R(116, 44 + k * 5, 26, 1, 'm'); R(152, 44 + k * 5, 10, 1, 'e'); }
+  // dining table with checked cloth and candle
+  R(10, 80, 80, 3, 'a'); for (let k = 0; k < 80; k += 4) R(10 + k, 82, 4, 10, (k / 4) % 2 ? 'c' : 'm'); R(20, 92, 3, 12, 'q'); R(78, 92, 3, 12, 'q');
+  R(46, 70, 3, 10, 'm'); X(47, 68 - (Math.floor(t / 200) % 2), 'e'); X(47, 69, 'd');
+  R(20, 78, 14, 2, 'm'); R(64, 78, 14, 2, 'm');
+};
+
+ROOM.post = t => {
+  wallBG('j', 'i', 'k'); floorTiles('n', 'm');
+  // pigeonholes with letters
+  O(10, 28, 120, 60, 'q'); for (let r = 0; r < 5; r++) for (let k = 0; k < 10; k++) { R(12 + k * 12, 30 + r * 11, 10, 9, 'a'); if ((k + r * 3) % 4) R(13 + k * 12, 33 + r * 11, 8, 5, (k + r) % 3 ? 'm' : 'e'); }
+  // envelope poster
+  O(150, 30, 40, 30, 'm'); SP2('i_env', 155, 36, 3);
+  // counter, scale and parcels
+  R(200, 74, 120, 30, 'i'); R(200, 74, 120, 3, 'k');
+  R(214, 66, 20, 8, 'n'); R(210, 64, 28, 2, 'o'); micro(String(Math.floor(t / 1500) % 9 + 1) + 'KG', 216, 68, 'a');
+  [[250, 56, 20, 18, 'r'], [274, 62, 26, 12, 'r'], [262, 44, 16, 12, 'q']].forEach(([x, y, w, h, c]) => { O(x, y, w, h, c); R(x + (w >> 1), y, 1, h, 'e'); R(x, y + (h >> 1), w, 1, 'e'); });
+  R(140, 88, 14, 16, 'c'); R(140, 86, 14, 3, 'c'); R(143, 92, 8, 1, 'a');
+};
+
+ROOM.park = t => {
+  skyBG(t, 'g'); grassFloor();
+  for (let k = 0; k < 8; k++) SP2(k % 2 ? 'pine' : 'tree', k * 42 - 10, 60 + (k % 3) * 4, 2);
+  // pond & fountain
+  R(190, 108, 110, 30, 'n'); R(192, 110, 106, 26, 'j'); R(194, 112, 102, 4, 'k');
+  const f = Math.floor(t / 100);
+  R(242, 100, 6, 14, 'n'); for (let k = 0; k < 10; k++) { const a = (f + k * 2) % 14, s = k % 2 ? 1 : -1; X(245 + s * a, 92 + Math.round((a - 6) * (a - 6) * 0.3), a < 7 ? 'l' : 'm'); }
+  R(243, 86, 4, 14, 'l');
+  for (let d = 0; d < 2; d++) { const x = 205 + d * 60 + Math.round(Math.sin(t / 1500 + d) * 10); SP2('duck', x, 114 + d * 8, 2); }
+  // flowerbeds
+  for (let b = 0; b < 2; b++) { R(10 + b * 60, 170, 50, 14, 'q'); for (let k = 0; k < 12; k++) { X(12 + b * 60 + k * 4, 172, ['c', 'e', 'b', 'm'][(k + b) % 4]); R(12 + b * 60 + k * 4, 173, 1, 3, 'g'); } }
+  SP2('bench', 20, 112, 3);
+};
+
+ROOM.pool = t => {
+  wallBG('l', 'k', 'm'); for (let x = 0; x < 320; x += 8) R(x, 22, 1, 76, 'k');
+  R(0, 104, 320, 96, 'm'); for (let x = 0; x < 320; x += 8) R(x, 104, 1, 96, 'n');
+  // water with ripples and lane ropes
+  R(0, 118, 320, 82, 'j'); R(0, 118, 320, 3, 'k');
+  const ph = Math.floor(t / 200);
+  for (let j = 0; j < 14; j++) { const ox = (ph * 2 + j * 37) % 320; R(ox, 124 + j * 6, 8, 1, 'k'); R((ox + 150) % 320, 126 + j * 6, 5, 1, 'l'); }
+  [140, 170].forEach(y => { for (let k = 0; k < 320; k += 4) R(k, y, 3, 2, (k / 4) % 4 < 2 ? 'c' : 'm'); });
+  // lifeguard chair & swim ring
+  R(250, 40, 3, 64, 'r'); R(280, 40, 3, 64, 'r'); for (let k = 0; k < 60; k += 10) R(250, 44 + k, 33, 2, 'r'); R(246, 36, 40, 6, 'c');
+  R(262, 22, 2, 14, 'n');
+  for (let a = 0; a < 40; a++) { const b = a / 6.4; R(40 + Math.round(Math.cos(b) * 12), 60 + Math.round(Math.sin(b) * 12), 3, 3, Math.floor(a / 5) % 2 ? 'c' : 'm'); }
+  poster(100, 32, 60, 20, 'e'); micro('NO RUNNING', 105, 39, 'c');
+};
+
+ROOM.farm = t => {
+  skyBG(t, 'f'); grassFloor();
+  // red barn wall
+  R(180, 30, 140, 74, 'c'); for (let k = 0; k < 140; k += 6) R(180 + k, 30, 1, 74, 'b'); R(180, 30, 140, 4, 'm');
+  O(220, 50, 50, 54, 'm'); R(222, 52, 46, 52, 'c'); line(222, 52, 267, 103, 'm'); line(267, 52, 222, 103, 'm');
+  // hay bales & pitchfork
+  for (let k = 0; k < 3; k++) { O(10 + k * 30, 84 - (k === 1 ? 20 : 0), 28, 20, 'e'); R(12 + k * 30, 90 - (k === 1 ? 20 : 0), 24, 1, 'd'); R(12 + k * 30, 96 - (k === 1 ? 20 : 0), 24, 1, 'd'); }
+  R(290, 46, 2, 58, 'q'); R(286, 40, 10, 2, 'n'); for (let k = 0; k < 3; k++) R(286 + k * 4, 34, 2, 7, 'n');
+  // vegetable rows: carrots, cabbages
+  for (let r = 0; r < 3; r++) { R(0, 150 + r * 16, 320, 6, 'q'); for (let k = 0; k < 320; k += 12) { if (r === 1) { R(k + 3, 146 + r * 16, 6, 5, 'g'); X(k + 5, 147 + r * 16, 'f'); } else { R(k + 5, 147 + r * 16, 2, 4, 'g'); R(k + 4, 151 + r * 16, 4, 2, 'd'); } } }
+  const peck = Math.floor(t / 300) % 4 === 0 ? 1 : 0;
+  SP2('chicken', 130, 112 + peck, 3); SP2('chicken', 158, 118, 3, null);
+};
+
+ROOM.zoo = t => {
+  skyBG(t, 'g'); grassFloor();
+  // big giraffe
+  const gb = Math.floor(t / 900) % 2;
+  SP2('giraffe', 200, 30 + gb * 2, 3); R(209, 66 + gb * 2, 9, 40, 'e'); R(194, 96, 50, 20, 'e'); for (let k = 0; k < 8; k++) R(196 + (k * 13) % 44, 98 + (k * 5) % 14, 4, 4, 'q');
+  R(196, 116, 4, 20, 'e'); R(238, 116, 4, 20, 'e');
+  // elephant
+  SP2('elephant', 20, 70 + Math.floor(t / 700) % 2, 4);
+  // fence
+  for (let k = 0; k < 320; k += 6) R(k, 104, 2, 20, 'q'); R(0, 108, 320, 2, 'r'); R(0, 118, 320, 2, 'r');
+  // food bucket
+  O(280, 110, 20, 18, 'o'); R(282, 106, 6, 5, 'f'); R(290, 107, 6, 4, 'e');
+};
+
+ROOM.vet = t => {
+  wallBG('f', 'g', 'm'); floorTiles('m', 'f');
+  // paw poster
+  O(30, 30, 40, 40, 'm'); R(32, 32, 36, 36, 'b'); R(42, 50, 16, 12, 'm'); R(38, 42, 6, 6, 'm'); R(46, 38, 6, 6, 'm'); R(54, 38, 6, 6, 'm'); R(60, 44, 6, 6, 'm');
+  // exam table with a dog
+  R(160, 80, 90, 5, 'n'); R(160, 80, 90, 1, 'm'); R(200, 85, 8, 19, 'o'); R(190, 102, 28, 2, 'o');
+  SP2('dog', 172, 62, 5);
+  const wag = Math.floor(t / 150) % 2; R(172, 70 + wag * 5, 5, 5, 'r');
+  // medicine cabinet
+  O(260, 30, 50, 50, 'm'); for (let s = 0; s < 3; s++) { R(262, 44 + s * 14, 46, 1, 'n'); for (let b = 0; b < 6; b++) R(264 + b * 7, 36 + s * 14, 5, 8, ['c', 'j', 'e', 'g', 'b', 'd'][(b + s) % 6]); }
+  // food bags & cat carrier
+  O(90, 80, 20, 24, 'd'); micro('PET', 91, 88, 'm'); O(112, 84, 18, 20, 'j');
+  SP2('carrier', 260, 88, 3); R(270, 94, 6, 3, 'q'); X(271, 94, 'e'); X(274, 94, 'e');
+};
+
+ROOM.garage = t => {
+  wallBG('o', 'p'); floorTiles('o', 'p');
+  // tool wall
+  O(10, 28, 110, 50, 'r'); for (let y = 32; y < 76; y += 4) for (let x = 14; x < 118; x += 4) X(x, y, 'q');
+  R(20, 34, 3, 26, 'n'); R(17, 32, 9, 5, 'n'); R(36, 34, 2, 30, 'n'); R(34, 60, 6, 4, 'n'); R(50, 36, 14, 4, 'c'); R(56, 40, 2, 18, 'q'); R(76, 34, 12, 3, 'n'); R(80, 37, 3, 20, 'n'); R(96, 34, 3, 24, 'e'); R(95, 56, 5, 4, 'e');
+  // car on a lift
+  const lift = Math.round(tri(t, 5000) * 6);
+  R(180, 80 - lift, 4, 24 + lift, 'n'); R(280, 80 - lift, 4, 24 + lift, 'n'); R(170, 78 - lift, 124, 4, 'e');
+  SP2('car', 190, 24 - lift, 6, { X: 'c' });
+  // tyres & drum & toolbox
+  for (let k = 0; k < 3; k++) SP2('tyre', 130, 104 - 12 - k * 11, 2);
+  SP2('drum', 300, 80, 3);
+  O(10, 90, 40, 14, 'c'); R(22, 86, 16, 4, 'a'); R(12, 94, 36, 1, 'b');
+};
+
+ROOM.recycling = t => {
+  wallBG('h', 'i', 'g'); floorTiles('o', 'n');
+  SP2('i_recycle', 130, 28, 3);
+  // conveyor belt with moving bottles
+  R(0, 70, 320, 10, 'p'); R(0, 70, 320, 2, 'o'); for (let k = 0; k < 20; k++) R(k * 16 + 4, 80, 6, 6, 'a');
+  const o = Math.floor(t / 40) % 320;
+  for (let k = 0; k < 6; k++) { const x = (o + k * 54) % 320; if (k % 2) { R(x, 60, 5, 10, 'g'); R(x + 1, 57, 3, 3, 'g'); } else { R(x, 62, 10, 8, 'r'); R(x, 62, 10, 1, 'q'); } }
+  // big bins
+  [['j', 'PAPER'], ['g', 'GLASS'], ['e', 'CANS']].forEach(([c, lab], i) => { const x = 20 + i * 100; O(x, 90, 60, 14 + 30, c); R(x - 2, 88, 64, 4, SHADE[c]); micro(lab, x + 30 - (microW(lab) >> 1), 100, 'm'); });
+};
+
+ROOM.airport = t => {
+  wallBG('m', 'o'); floorTiles('m', 'n');
+  // big window with a plane passing
+  O(8, 26, 150, 60, 'n'); R(10, 28, 146, 56, 'k'); R(10, 60, 146, 24, 'l'); R(10, 74, 146, 10, 'o');
+  const px = 160 - Math.floor(t / 30) % 220;
+  G.save(); G.beginPath(); G.rect(10, 28, 146, 56); G.clip(); SP2('plane', px, 58 - Math.max(0, (60 - px) / 4), 3); G.restore();
+  for (let k = 0; k < 146; k += 37) R(10 + k, 28, 2, 56, 'n');
+  // departures board with flipping rows
+  O(176, 26, 136, 50, 'a'); micro('DEPARTURES', 200, 29, 'e');
+  const cities = ['LONDON', 'PARIS', 'TOKYO', 'ROME', 'CAIRO', 'LIMA', 'OSLO'];
+  for (let r = 0; r < 5; r++) { const c = cities[(r + Math.floor(t / 3000)) % 7]; micro(c, 180, 38 + r * 7, 'm'); micro(String(10 + r) + ':' + (r * 15 % 60 === 0 ? '00' : String(r * 15 % 60)), 240, 38 + r * 7, 'e'); micro(r === (Math.floor(t / 3000) % 5) ? 'GO' : 'OK', 290, 38 + r * 7, r === (Math.floor(t / 3000) % 5) ? 'f' : 'k'); }
+  // check-in desk with baggage scale
+  R(190, 82, 120, 22, 'j'); R(190, 82, 120, 3, 'k'); micro('CHECK IN', 226, 90, 'm');
+  R(170, 96, 20, 8, 'n'); R(172, 92, 16, 4, 'o');
+  SP2('suitcaseS', 172, 76, 4);
+};
+
+ROOM.bus = t => {
+  wallBG('e', 'q'); floorTiles('n', 'o');
+  // window with a big bus outside
+  O(10, 28, 190, 60, 'n'); R(12, 30, 186, 56, 'l'); R(12, 70, 186, 16, 'o');
+  const bx = 20 + Math.round(tri(t, 12000) * 30);
+  G.save(); G.beginPath(); G.rect(12, 30, 186, 56); G.clip(); SP2('bus', bx, 50, 6, { X: 'g' }); G.restore();
+  // timetable board
+  O(214, 28, 96, 54, 'a'); micro('BUS TIMES', 236, 31, 'e');
+  for (let r = 0; r < 5; r++) { micro(String(r + 1), 220, 41 + r * 8, 'k'); R(230, 43 + r * 8, 40, 1, 'm'); micro(String(8 + r) + ':' + (r % 2 ? '30' : '00'), 280, 41 + r * 8, (Math.floor(t / 800) + r) % 5 ? 'm' : 'e'); }
+  // ticket machine & bench
+  O(290, 84, 22, 20, 'c'); R(294, 88, 14, 6, 'f'); R(296, 96, 10, 2, 'a');
+  R(214, 92, 60, 4, 'q'); R(216, 96, 3, 8, 'a'); R(268, 96, 3, 8, 'a');
+  clockR(150, 26 - 2, t);
+};
+
+ROOM.construction = t => {
+  skyBG(t, 'r'); R(0, 104, 320, 96, 'r'); dither(0, 104, 320, 96, 'q', G);
+  // scaffolding and half wall
+  bricks(180, 50, 130, 54, 'd', 'c');
+  for (let k = 0; k < 4; k++) R(180 + k * 42, 30, 3, 74, 'e'); for (let k = 0; k < 3; k++) R(178, 40 + k * 24, 136, 3, 'q');
+  // crane hook with a swinging load
+  const sw = Math.round(Math.sin(t / 700) * 4);
+  R(0, 22, 320, 4, 'e'); for (let k = 0; k < 320; k += 6) line(k, 22, k + 3, 25, 'd');
+  line(120, 26, 120 + sw, 60, 'a'); R(116 + sw, 60, 9, 4, 'o'); R(106 + sw, 64, 30, 6, 'c'); R(106 + sw, 64, 30, 2, 'd');
+  // brick stack, mixer, cones, blueprint table
+  for (let r = 0; r < 4; r++) for (let k = 0; k < 4 - (r >> 1); k++) R(10 + k * 12 + r * 2, 96 - r * 6, 10, 5, 'c');
+  SP2('mixer', 240, 110, 4);
+  const d = Math.floor(t / 200) % 3; R(260 + d * 4, 116, 4, 4, 'p');
+  SP2('cone', 150, 120, 3); SP2('cone', 20, 140, 3);
+  R(60, 80, 50, 3, 'q'); R(62, 78, 46, 3, 'k'); R(64, 83, 2, 20, 'q'); R(104, 83, 2, 20, 'q'); line(66, 79, 100, 79, 'm');
+};
+
+ROOM.harbour = t => {
+  skyBG(t);
+  R(0, 70, 320, 130, 'j');
+  const ph = Math.floor(t / 250);
+  for (let j = 0; j < 20; j++) { const ox = (ph * 2 + j * 53) % 330 - 10; R(ox, 74 + j * 6, 10, 1, 'k'); if (j % 2) R((ox + 160) % 330, 76 + j * 6, 6, 1, 'l'); }
+  // lighthouse far away with rotating beam
+  R(270, 34, 10, 36, 'm'); for (let k = 0; k < 36; k += 12) R(270, 34 + k, 10, 6, 'c'); R(268, 26, 14, 8, 'e'); R(267, 24, 16, 3, 'c');
+  const beam = Math.floor(t / 250) % 6;
+  if (beam < 3) for (let k = 0; k < 40; k++) X(266 - k, 30 + Math.round((k * (beam - 1)) / 6), 'e');
+  // pier
+  R(0, 104, 150, 12, 'q'); for (let k = 0; k < 150; k += 5) R(k, 104, 1, 12, 'r'); for (let k = 10; k < 150; k += 30) R(k, 116, 6, 40, 'q');
+  // bobbing boat
+  SP2('boat', 170, 84 + (Math.floor(t / 600) % 2) * 2, 5);
+  // fish crates, net, seagulls
+  for (let k = 0; k < 3; k++) { SP2('crate', 10 + k * 26, 90, 3); SP2('fish', 14 + k * 26, 86, 2); }
+  for (let y = 0; y < 16; y += 4) for (let x = 0; x < 30; x += 4) { X(100 + x, 88 + y, 'n'); X(102 + x, 90 + y, 'n'); }
+  for (let g = 0; g < 3; g++) { const a = t / 1500 + g * 2; SP2(Math.floor(t / 200 + g) % 2 ? 'gull0' : 'gull1', 120 + g * 50 + Math.round(Math.cos(a) * 20), 36 + g * 6 + Math.round(Math.sin(a) * 6), 2); }
+};
+
+/* =====================================================================
+   SCREENS: title, city map
+   ===================================================================== */
+Object.assign(MICRO, { '+':['...','.#.','###','.#.','...'], '=':['...','###','...','###','...'], '.':['.','.','.','.','#'],
+  '$':['.##','##.','.#.','.##','##.'], '4':['#.#','#.#','###','..#','..#'], '6':['.##','#..','###','#.#','###'], '9':['###','#.#','###','..#','##.'] });
+const game = { screen: 'title', t: 0, cam: { x: 200, y: 110 }, hover: null, sel: null, lastHover: null, trans: null,
+               room: null, bookPage: 0, bookFrom: 'title', settingsFrom: 'title', confirmReset: false, modal: null };
+
+function goto(screen, fn) {
+  if (game.trans) return;
+  game.trans = { t: 0, dur: 420, to: screen, fn, switched: false };
+}
+function suggestedPlace() {
+  for (const id of SUGGEST) if (!placeDone(PLACE[id])) return PLACE[id];
+  return PLACES.find(p => !placeDone(p)) || null;
+}
+function clampCam() {
+  game.cam.x = Math.max(0, Math.min(EXT_W - VW, game.cam.x));
+  game.cam.y = Math.max(0, Math.min(EXT_H - VH, game.cam.y));
+}
+function centerOn(p) { game.cam.x = p.x + p.w / 2 - VW / 2; game.cam.y = p.y + p.h / 2 - VH / 2 + 10; clampCam(); }
+
+/* ---------- title screen ---------- */
+const skyline = (() => { const R0 = seeded(7), b = []; let x = 0; while (x < 330) { const w = 14 + Math.floor(R0() * 18), h = 24 + Math.floor(R0() * 50); b.push({ x, w, h, c: ['i', 'p', 'b', 'h'][Math.floor(R0() * 4)], seed: Math.floor(R0() * 1000) }); x += w + 1; } return b; })();
+function drawTitle(t) {
+  G = P;
+  R(0, 0, 320, 200, 'i'); R(0, 0, 320, 60, 'a'); dither(0, 56, 320, 10, 'i', G);
+  for (let k = 0; k < 40; k++) { const sx = (k * 97) % 320, sy = (k * 53) % 90; if ((Math.floor(t / 400) + k) % 7) X(sx, sy, k % 5 ? 'n' : 'm'); }
+  R(292, 78, 12, 12, 'e'); R(290, 80, 16, 8, 'e'); R(296, 78, 9, 9, 'i'); R(295, 80, 10, 7, 'i');
+  // plane crossing the sky
+  const pxp = 340 - (Math.floor(t / 25) % 420);
+  SP('plane', pxp, 70); if (blinkOn(t, 300)) X(pxp + 12, 71, 'c');
+  // skyline with flickering windows
+  skyline.forEach(b => {
+    const y0 = 170 - b.h;
+    R(b.x, y0, b.w, b.h, b.c); R(b.x, y0, b.w, 1, 'o');
+    for (let wy = y0 + 4; wy < 164; wy += 6) for (let wx = b.x + 3; wx < b.x + b.w - 3; wx += 5) {
+      const on = ((wx * 13 + wy * 7 + b.seed + Math.floor(t / 1500) * ((wx + wy) % 3 === 0 ? 1 : 0)) % 5) < 2;
+      R(wx, wy, 2, 3, on ? 'e' : 'p');
+    }
+  });
+  R(0, 170, 320, 30, 'p'); R(0, 172, 320, 1, 'o'); for (let x = (Math.floor(t / 40) % 16); x < 320; x += 16) R(320 - x, 184, 8, 1, 'e');
+  R(0, 196, 320, 4, 'n');
+  const cx = (Math.floor(t / 20) % 380) - 30; SP('car', cx, 176, { X: 'c' }); SP('taxi', 330 - ((Math.floor(t / 28) + 150) % 380), 185, null, true);
+  SP('bus', ((Math.floor(t / 35) + 200) % 400) - 40, 174, { X: 'g' });
+  // logo panel
+  box(40, 14, 240, 58);
+  txt('JOB CITY', 160, 26, { size: 24, color: '#ffcd75', align: 'center', shadow: '#b13e53' });
+  txt('Learn jobs and places in English!', 160, 55, { f: 'vt', size: 11, color: '#73eff7', align: 'center' });
+  SP('i_case', 50, 24); SP('i_case', 259, 24);
+  if (button(100, 84, 120, 22, 'START', { face: 'g', size: 9 }) || keyHit('Enter')) { sfx.enter(); const s = suggestedPlace(); if (s && jobsDone() < 3) centerOn(s); goto('map'); }
+  if (button(100, 112, 120, 22, 'JOB BOOK', { face: 'j', size: 8 })) { sfx.click(); game.bookFrom = 'title'; goto('book'); }
+  if (button(100, 140, 120, 22, 'SETTINGS', { face: 'b', size: 8 })) { sfx.click(); game.settingsFrom = 'title'; goto('settings'); }
+  txt('JOBS ' + String(jobsDone()).padStart(2, '0') + '/' + JOBS.length, 316, 190, { size: 5, align: 'right', color: '#94b0c2' });
+}
+
+/* ---------- city map ---------- */
+let outlineCv = null, outlineMask = null;
+function drawPlaceOutlined(p, sx, sy, t) {
+  const pad = 4, top = 26, w = p.w + pad * 2, h = p.h + top + pad;
+  if (!outlineCv || outlineCv.width < w || outlineCv.height < h) { outlineCv = newCanvas(Math.max(w, 180), Math.max(h, 170)); outlineMask = newCanvas(outlineCv.width, outlineCv.height); }
+  const oc = outlineCv.getContext('2d'), mc = outlineMask.getContext('2d');
+  oc.clearRect(0, 0, outlineCv.width, outlineCv.height); mc.clearRect(0, 0, outlineMask.width, outlineMask.height);
+  oc.imageSmoothingEnabled = false; mc.imageSmoothingEnabled = false;
+  G = oc; BLD[p.id](pad, top, t); G = P;
+  mc.globalCompositeOperation = 'source-over'; mc.drawImage(outlineCv, 0, 0);
+  mc.globalCompositeOperation = 'source-in'; mc.fillStyle = PAL.m; mc.fillRect(0, 0, outlineMask.width, outlineMask.height);
+  mc.globalCompositeOperation = 'source-over';
+  const ox = sx - pad, oy = sy - top;
+  [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => P.drawImage(outlineMask, ox + dx, oy + dy));
+  P.drawImage(outlineCv, ox, oy);
+}
+const labelBoxes = [];
+function nameTag(text, cx, y, big) {
+  const size = big ? 6 : 4.5, w = Math.ceil(measure(text, 'ps', size)) + (big ? 8 : 5), h = big ? 12 : 8;
+  let x = Math.round(cx - w / 2); x = Math.max(2, Math.min(VW - w - 2, x));
+  if (!big) {
+    if (y < 23 || y > VH - 10) return;
+    const hit = (yy) => labelBoxes.some(b => x < b.x + b.w + 2 && x + w + 2 > b.x && yy < b.y + b.h + 1 && yy + h + 1 > b.y);
+    if (hit(y)) { if (!hit(y + 9) && y + 9 <= VH - 10) y += 9; else return; }
+    labelBoxes.push({ x, y, w, h });
+  }
+  y = Math.max(24, Math.min(VH - h - 2, Math.round(y)));
+  if (big) { box(x, y, w, h); X(Math.round(cx), y + h, 'm'); }
+  else { R(x, y, w, h, 'a'); R(x, y + h - 1, w, 1, 'p'); }
+  txt(text, x + w / 2, y + (big ? 3 : 2), { size, align: 'center', color: big ? '#ffcd75' : '#f4f4f4', shadow: big ? '#1a1c2c' : null });
+}
+function placeAt(wx, wy) {
+  let best = null, area = 1e9;
+  PLACES.forEach(p => { if (wx >= p.x && wx < p.x + p.w && wy >= p.y - 4 && wy < p.y + p.h) { const a = p.w * p.h; if (a < area) { area = a; best = p; } } });
+  return best;
+}
+function enterPlace(p) { sfx.enter(); goto('room', () => startRoom(p)); }
+function uiZone(x, y) { return y < 23 || (x < 76 && y > 174) || (x > 238 && y > 146); }
+
+function drawMap(t, dt) {
+  G = P;
+  // camera: drag, keys
+  if (input.down && input.drag && !uiZone(input.sx, input.sy)) { game.cam.x -= input.dx; game.cam.y -= input.dy; }
+  input.dx = 0; input.dy = 0;
+  const sp = 0.16 * dt;
+  if (input.keys.ArrowLeft || input.keys.a || input.keys.A) game.cam.x -= sp;
+  if (input.keys.ArrowRight || input.keys.d || input.keys.D) game.cam.x += sp;
+  if (input.keys.ArrowUp || input.keys.w || input.keys.W) game.cam.y -= sp;
+  if (input.keys.ArrowDown || input.keys.s || input.keys.S) game.cam.y += sp;
+  clampCam();
+  const cx = Math.round(game.cam.x), cy = Math.round(game.cam.y);
+  updateTraffic(dt);
+  // world
+  P.drawImage(worldCv, -cx, -cy);
+  drawWater(cx, cy, t);
+  // hover / selection
+  let hov = null;
+  if (input.mouse && !input.down && input.x >= 0 && !uiZone(input.x, input.y)) hov = placeAt(input.x + cx, input.y + cy);
+  if (hov !== game.lastHover) { if (hov) sfx.hover(); game.lastHover = hov; }
+  game.hover = hov;
+  const hi = hov || game.sel;
+  // buildings sorted by depth
+  const vis = PLACES.filter(p => p.x - cx + p.w > -8 && p.x - cx < VW + 8 && p.y - cy + p.h > -30 && p.y - cy < VH + 30).sort((a, b) => (a.y + a.h) - (b.y + b.h));
+  vis.forEach(p => {
+    const sx = p.x - cx, sy = p.y - cy;
+    if (p === hi) { const b = [0, 1, 2, 1][Math.floor(t / 90) % 4]; drawPlaceOutlined(p, sx, sy - b, t); }
+    else BLD[p.id](sx, sy, t);
+    if (placeDone(p)) SP('i_star', sx + (p.w >> 1) - 3, sy - 6 + (Math.floor(t / 500) % 2));
+  });
+  drawTraffic(cx, cy, t);
+  drawWalkers(cx, cy, t);
+  // suggestion arrow for new players
+  const sug = suggestedPlace();
+  if (sug && jobsDone() < 3) {
+    let ax = sug.x - cx + (sug.w >> 1) - 4, ay = sug.y - cy - 16 + [0, 1, 2, 1][Math.floor(t / 150) % 4];
+    ax = Math.max(4, Math.min(VW - 12, ax)); ay = Math.max(26, Math.min(VH - 40, ay));
+    SP2('i_arrow', ax - 4, ay - 6, 2);
+  }
+  // labels
+  labelBoxes.length = 0;
+  if (save.settings.labels) vis.forEach(p => { if (p !== hi) nameTag(p.name.toUpperCase(), p.x - cx + p.w / 2, p.y - cy + p.h + 1, false); });
+  if (hi) nameTag(save.settings.labels ? hi.name.toUpperCase() : '? ? ?', hi.x - cx + hi.w / 2, hi.y - cy - 20, true);
+  // clicks on buildings
+  let clickedPlace = null;
+  const c = input.click;
+  if (c && !c.used && !uiZone(c.x, c.y)) {
+    const p = placeAt(c.x + cx, c.y + cy);
+    if (p) {
+      c.used = true;
+      if (!c.touch || game.sel === p) { clickedPlace = p; }
+      else { game.sel = p; sfx.select(); }
+    } else { game.sel = null; }
+  }
+  if (keyHit('Enter', ' ')) { const p = game.sel || game.hover || sug; if (p) clickedPlace = p; }
+  drawHUD(t);
+  drawMinimap(cx, cy);
+  if (button(2, 176, 22, 22, '', { icon: 'i_book', label: false, face: 'j' })) { sfx.click(); game.bookFrom = 'map'; goto('book'); }
+  if (button(26, 176, 22, 22, '', { icon: 'i_gear', label: false, face: 'b' })) { sfx.click(); game.settingsFrom = 'map'; goto('settings'); }
+  if (button(50, 176, 22, 22, '', { icon: 'i_home', label: false, face: 'o' })) { sfx.click(); goto('title'); }
+  if (clickedPlace) enterPlace(clickedPlace);
+  if (hov) input.cursor = 'pointer';
+}
+function drawHUD(t) {
+  box(2, 2, 58, 18);
+  txt('JOB', 31, 4.5, { size: 6, color: '#ffcd75', align: 'center', shadow: '#b13e53' });
+  txt('CITY', 31, 12, { size: 6, color: '#ffcd75', align: 'center', shadow: '#b13e53' });
+  box(64, 2, 182, 18);
+  const hint = game.sel ? 'Tap again to go in!' : 'Click a building. Who works there?';
+  const hs = fitSize(hint, 'vt', 11, 164, 6);
+  txt(hint, 69, 11 - hs / 2 - 1, { f: 'vt', size: hs, color: '#f4f4f4' });
+  if (blinkOn(t, 450)) { R(236, 9, 5, 1, 'e'); R(237, 10, 3, 1, 'e'); X(238, 11, 'e'); }
+  box(250, 2, 68, 18);
+  SP('i_case', 252, 3);
+  txt('JOBS ' + String(jobsDone()).padStart(2, '0') + '/' + JOBS.length, 264, 4.5, { size: 4.5, color: '#f4f4f4' });
+  SP('i_coinS', 254, 12);
+  txt(String(save.coins).padStart(4, '0'), 264, 13, { size: 4.5, color: '#ffcd75' });
+}
+function drawMinimap(cx, cy) {
+  const x = 242, y = 150, w = miniCv.width, h = miniCv.height;
+  box(x - 1, y - 1, w + 2, h + 2);
+  P.drawImage(miniCv, x, y);
+  PLACES.forEach(p => { if (placeDone(p)) R(x + Math.round((p.x + p.w / 2) / 10) - 1, y + Math.round((p.y + p.h / 2) / 10) - 1, 2, 2, 'e'); });
+  const sug = suggestedPlace();
+  if (sug && blinkOn(game.t, 300)) R(x + Math.round((sug.x + sug.w / 2) / 10) - 1, y + Math.round((sug.y + sug.h / 2) / 10) - 1, 2, 2, 'm');
+  frame(x + Math.round(cx / 10), y + Math.round(cy / 10), 32, 20, 'm');
+  if (clickIn(x, y, w, h)) { game.cam.x = (input.click.x - x) * 10 - VW / 2; game.cam.y = (input.click.y - y) * 10 - VH / 2; clampCam(); sfx.click(); }
+  if (input.down && !input.drag && input.sx >= x && input.sy >= y && input.sx < x + w && input.sy < y + h) { game.cam.x = (input.x - x) * 10 - VW / 2; game.cam.y = (input.y - y) * 10 - VH / 2; clampCam(); }
+}
+
+/* =====================================================================
+   PLACE INTERIOR + PRESENT SIMPLE PRACTICE
+   ===================================================================== */
+function phrase(j) { return j.base + ' ' + j.rest; }
+function others(job) { return shuffle(JOBS.filter(j => j.place !== job.place && j.group !== job.group && phrase(j) !== phrase(job))); }
+function spellHint(j) {
+  if (j.verbS === 'does') return 'do → does (irregular!)';
+  if (/ies$/.test(j.verbS)) return j.base + ' → ' + j.verbS + ' (y → ies)';
+  const m = j.base.match(/(ch|sh|ss|x|o|s|z)$/);
+  if (m && /es$/.test(j.verbS)) return j.base + ' → ' + j.verbS + ' (-es after ' + m[1] + ')';
+  return 'He / she / it → add -s! (' + j.base + ' → ' + j.verbS + ')';
+}
+function makeQuestions(job) {
+  const pl = PLACE[job.place], p = job.pronoun, a = art(job.job), qs = [];
+  // 1. Guess what I do (2nd person)
+  const wrong = [], used = [job.base];
+  for (const o of others(job)) { if (used.indexOf(o.base) < 0) { wrong.push(o); used.push(o.base); } if (wrong.length === 2) break; }
+  qs.push({ kind: 1, text: 'Hi! I work at the ' + pl.name + '. What do you think I do here?',
+    choices: shuffle([{ text: 'You ' + phrase(job) + '.', ok: true }].concat(wrong.map(o => ({ text: 'You ' + phrase(o) + '.', hint: "No, I don't " + phrase(o) + '. Look at my uniform!' })))),
+    reply: 'Yes! I ' + phrase(job) + ". I'm " + a + ' ' + job.job + '!' });
+  // 2. Complete the sentence (3rd person -s)
+  qs.push({ kind: 2, text: 'Complete it: The ' + job.job + ' ______ ' + job.rest + '.',
+    choices: shuffle([{ text: job.verbS, ok: true }, { text: job.base, hint: spellHint(job) }, { text: job.ing, hint: 'No -ing here! He / she + ' + job.verbS + '.' }]),
+    reply: 'The ' + job.job + ' [' + job.verbS + '] ' + job.rest + '.' });
+  // 3. Question and short answer
+  const truth = Math.random() < 0.5, o = others(job)[0];
+  const qv = truth ? phrase(job) : phrase(o);
+  const yes = 'Yes, ' + p + ' does.', no = 'No, ' + p + " doesn't.", bad = 'No, ' + p + " don't.";
+  const fact = cap(a) + ' ' + job.job + ' ' + job.verbS + ' ' + job.rest + '.';
+  qs.push({ kind: 3, text: 'Does ' + a + ' ' + job.job + ' ' + qv + '?',
+    choices: shuffle([{ text: yes, ok: truth, hint: 'Think about the job! What does ' + a + ' ' + job.job + ' do?' },
+                      { text: no, ok: !truth, hint: 'Think about the job! What does ' + a + ' ' + job.job + ' do?' },
+                      { text: bad, hint: "Use doesn't with he / she." }]),
+    reply: (truth ? yes : no) + ' ' + fact });
+  return qs;
+}
+function charPositions(room) {
+  const ids = room.place.jobs;
+  return ids.length === 1 ? [{ id: ids[0], x: 45 }] : [{ id: ids[0], x: 11 }, { id: ids[1], x: 91 }];
+}
+function startRoom(p) {
+  const r = { place: p, hearts: 3, phase: 'choose', job: null, q: 0, qs: null, fb: null, shake: 0, answered: false, wrongs: {}, flash: 0 };
+  game.room = r;
+  if (p.jobs.length === 1) startJob(r, p.jobs[0]);
+  else setDlg(r, p.name.toUpperCase(), 'Two people work at the ' + p.name + '. Tap a person to talk!');
+}
+function startJob(r, id) {
+  r.job = JOB[id]; r.qs = makeQuestions(r.job); r.q = 0; r.hearts = 3; r.phase = 'q'; r.answered = false; r.wrongs = {}; r.fb = null;
+  setDlg(r, r.job.tag, r.qs[0].text);
+}
+function setDlg(r, tag, text, instant) {
+  const words = text.split(' ').map(w => { const h = w.indexOf('[') >= 0; return { w: w.replace(/[\[\]]/g, ''), h }; });
+  r.dlg = { tag, words, plain: words.map(w => w.w).join(' '), shown: instant ? 9999 : 0, acc: 0 };
+}
+function dlgDone(r) { return r.dlg.shown >= r.dlg.plain.length; }
+function answer(r, ch, idx, bx, by) {
+  const q = r.qs[r.q];
+  if (ch.ok) {
+    sfx.correct(); sfx.coin();
+    save.coins += 10; persist();
+    addFloater('+10 coins', bx, by);
+    r.answered = true; r.fb = { ok: true, text: ['Great job!', 'Correct!', 'Well done!', 'Super!'][rnd(4)], t: game.t };
+    setDlg(r, r.job.tag, q.reply, q.kind === 2);
+    r.flash = game.t;
+    speak(q.reply.replace(/[\[\]]/g, ''));
+  } else {
+    sfx.wrong();
+    r.hearts = Math.max(0, r.hearts - 1);
+    r.wrongs[idx] = true; r.shake = game.t;
+    r.fb = { ok: false, text: ch.hint, t: game.t };
+  }
+}
+function nextQuestion(r) {
+  r.q++; r.answered = false; r.wrongs = {}; r.fb = null;
+  if (r.q < 3) { setDlg(r, r.job.tag, r.qs[r.q].text); return; }
+  const stars = r.hearts >= 3 ? 3 : (r.hearts === 2 ? 2 : 1);
+  const prev = save.jobs[r.job.id];
+  save.jobs[r.job.id] = { stars: Math.max(stars, prev ? prev.stars : 0) };
+  persist();
+  sfx.fanfare();
+  game.modal = { kind: 'unlock', job: r.job, stars, t: game.t, isNew: !prev };
+  r.phase = 'choose';
+  const left = r.place.jobs.filter(id => !save.jobs[id]);
+  if (left.length) setDlg(r, r.place.name.toUpperCase(), 'Now tap the other person to talk!', true);
+  else setDlg(r, r.job.tag, 'Thank you! Tap < MAP to find more jobs. Or tap me to play again.', true);
+  r.job = null;
+}
+function drawChar(id, x, y, s, t, shakeT, idx) {
+  const breath = Math.floor((t + idx * 300) / 650) % 2 === 1;
+  const blink = (Math.floor(t + idx * 900) % 3300) < 140;
+  const c = charCanvas(id, breath, blink);
+  let dx = 0;
+  if (shakeT && t - shakeT < 700) dx = [-2, 0, 2, 0][Math.floor((t - shakeT) / 70) % 4];
+  const cut = CH_OY + 11;
+  // floor shadow
+  R(x + 7 * s, y + 28 * s, 12 * s, 2, 'a'); R(x + 5 * s, y + 28 * s + 1, 16 * s, 1, 'a');
+  P.imageSmoothingEnabled = false;
+  P.drawImage(c, 0, 0, CH_W, cut, x + dx, y, CH_W * s, cut * s);
+  P.drawImage(c, 0, cut, CH_W, CH_H - cut, x, y + cut * s, CH_W * s, (CH_H - cut) * s);
+}
+function drawRoom(t, dt) {
+  const r = game.room, pl = r.place;
+  G = P;
+  ROOM[pl.id](t);
+  // characters
+  const pos = charPositions(r), s = 3, cy = 132 - 28 * s;
+  pos.forEach((c, i) => {
+    const active = r.job && r.job.id === c.id;
+    drawChar(c.id, c.x, cy, s, t, active ? r.shake : 0, i);
+    if (save.jobs[c.id]) SP('i_star', c.x + 36, cy - 2 + (Math.floor(t / 400) % 2));
+    if (r.phase === 'choose' && !game.modal) {
+      const bob = [0, 1, 2, 1][Math.floor(t / 150) % 4];
+      SP('i_arrow', c.x + 36, cy - 12 + bob);
+      if (clickIn(c.x + 10, cy + 6, 58, 80)) { sfx.select(); startJob(r, c.id); }
+      if (hitHover(c.x + 10, cy + 6, 58, 80)) input.cursor = 'pointer';
+    }
+  });
+  // top bar
+  R(0, 0, 320, 22, 'a'); R(0, 21, 320, 1, 'p');
+  if (button(2, 2, 44, 18, '< MAP', { face: 'c', size: 6 }) || keyHit('Escape')) { sfx.click(); goto('map'); }
+  const nm = pl.name.toUpperCase(), ns = fitSize(nm, 'ps', 6, 120, 4), nw = Math.min(132, Math.ceil(measure(nm, 'ps', ns)) + 14);
+  R(160 - nw / 2 - 1, 2, nw + 2, 18, 'a'); R(160 - nw / 2, 3, nw, 16, 'q'); R(160 - nw / 2 + 1, 4, nw - 2, 14, 'r'); X(160 - nw / 2 + 2, 5, 'e'); X(160 + nw / 2 - 3, 5, 'e'); X(160 - nw / 2 + 2, 16, 'e'); X(160 + nw / 2 - 3, 16, 'e');
+  txt(nm, 160, 11 - ns / 2, { size: ns, align: 'center', color: '#ffcd75' });
+  for (let h = 0; h < 3; h++) SP(h < r.hearts ? 'i_heart' : 'i_heartOff', 236 + h * 10, 7);
+  txt(r.job ? 'Q ' + Math.min(3, r.q + 1) + '/3' : 'Q -/3', 316, 8, { size: 5.5, align: 'right' });
+  // feedback banner
+  if (r.fb && r.phase === 'q') {
+    const fs = Math.min(11, dlgSize()), lines = wrap(r.fb.text, 'vt', fs, 150), h = lines.length * fs + 8;
+    box(4, 26, 160, h, 'a', r.fb.ok ? 'f' : 'd');
+    lines.forEach((l, i) => txt(l, 10, 29 + i * fs, { f: 'vt', size: fs, color: r.fb.ok ? '#a7f070' : '#ffcd75' }));
+  }
+  // dialogue box
+  drawDialogue(r, t, dt);
+  // answer choices
+  if (r.phase === 'q' && dlgDone(r) && !r.answered && !game.modal) {
+    const q = r.qs[r.q];
+    q.choices.forEach((ch, i) => {
+      const by = 40 + i * 31, wrongPicked = r.wrongs[i];
+      const size = fitSize(ch.text, 'vt', Math.min(12, dlgSize()), 132, 7);
+      if (button(170, by, 146, 27, ch.text, { f: 'vt', size, face: wrongPicked ? 'o' : 'i', disabled: wrongPicked, align: 'left', textColor: wrongPicked ? '#94b0c2' : '#f4f4f4' }) || keyHit(String(i + 1))) {
+        if (!wrongPicked) answer(r, ch, i, 243, by);
+      }
+      txt(String(i + 1), 313, by + 2, { size: 4, color: '#94b0c2', align: 'right', shadow: null });
+    });
+  }
+  if (r.phase === 'q' && r.answered && dlgDone(r) && !game.modal) {
+    if (button(230, 110, 86, 22, 'NEXT ▶', { face: 'g', size: 7 }) || keyHit('Enter', ' ')) { sfx.click(); nextQuestion(r); }
+  }
+  if (r.phase === 'choose' && !game.modal && pl.jobs.length === 1 && clickIn(0, 136, 320, 64)) { /* tap box = nothing */ }
+  if (r.phase === 'choose' && !game.modal && pl.jobs.length === 1 && keyHit('Enter', ' ')) startJob(r, pl.jobs[0]);
+  drawFloaters(dt);
+}
+function drawDialogue(r, t, dt) {
+  const d = r.dlg, x = 4, y = 138, w = 312, h = 58;
+  box(x, y, w, h);
+  R(x + 2, y + 2, w - 4, 1, 'p');
+  // yellow name tag on the top edge
+  const tag = d.tag, ts = 5.5, tw = Math.ceil(measure(tag, 'ps', ts)) + 10;
+  R(x + 8, y - 6, tw, 11, 'a'); R(x + 9, y - 5, tw - 2, 9, 'e'); R(x + 9, y + 3, tw - 2, 1, 'd');
+  txt(tag, x + 13, y - 3, { size: ts, color: '#1a1c2c', shadow: null });
+  // speaker button
+  if (button(x + w - 24, y + 5, 20, 18, '', { icon: 'i_speaker', label: false, face: 'h' })) { sfx.click(); speak(d.plain); }
+  // typewriter
+  if (!dlgDone(r)) {
+    d.acc += dt;
+    while (d.acc > 28 && !dlgDone(r)) { d.acc -= 28; d.shown++; if (d.shown % 3 === 0 && d.plain[d.shown] !== ' ') sfx.blip(); }
+  }
+  if (!dlgDone(r) && clickIn(x, y, w, h)) d.shown = d.plain.length;
+  // layout words
+  const size = dlgSize(), maxW = w - 36, lh = size * 1.02;
+  const lines = [[]]; let lw = 0;
+  const sp = measure(' ', 'vt', size);
+  d.words.forEach(wd => { const ww = measure(wd.w, 'vt', size); if (lw + ww > maxW && lines[lines.length - 1].length) { lines.push([]); lw = 0; } lines[lines.length - 1].push({ wd, ww }); lw += ww + sp; });
+  let count = 0;
+  const flashOn = r.flash && game.t - r.flash < 2400 && Math.floor((game.t - r.flash) / 200) % 2 === 0;
+  lines.forEach((ln, li) => {
+    let cx = x + 8;
+    ln.forEach(({ wd, ww }) => {
+      const left = d.shown - count;
+      if (left > 0) {
+        const s = left >= wd.w.length ? wd.w : wd.w.slice(0, left);
+        if (wd.h) { R(cx - 1, y + 7 + li * lh - 1, ww + 2, size + 1, flashOn ? 'e' : 'b'); }
+        txt(s, cx, y + 6 + li * lh, { f: 'vt', size, color: wd.h ? (flashOn ? '#1a1c2c' : '#ffcd75') : '#f4f4f4', shadow: wd.h && flashOn ? null : '#333c57' });
+      }
+      count += wd.w.length + 1; cx += ww + sp;
+    });
+  });
+  if (dlgDone(r) && blinkOn(t, 400) && r.phase !== 'q') { R(x + w - 14, y + h - 8, 5, 1, 'e'); R(x + w - 13, y + h - 7, 3, 1, 'e'); X(x + w - 12, y + h - 6, 'e'); }
+}
+function drawUnlockModal(t) {
+  const m = game.modal, j = m.job;
+  dither(0, 0, 320, 200, 'a', G);
+  for (let k = 0; k < 30; k++) { const cx = (k * 37 + Math.floor((t - m.t) / 30) * (k % 3 + 1)) % 320, cy = ((k * 23) + Math.floor((t - m.t) / 20) * (k % 2 + 1)) % 200; R(cx, cy, 2, 2, ['c', 'e', 'f', 'k', 'd'][k % 5]); }
+  box(34, 20, 252, 160);
+  txt(m.isNew ? 'NEW JOB CARD!' : 'JOB CARD', 160, 28, { size: 9, color: '#ffcd75', align: 'center', shadow: '#b13e53' });
+  O(44, 42, 70, 92, 'i');
+  const c = charCanvas(j.id, Math.floor(t / 650) % 2 === 1, false);
+  P.drawImage(c, 53, 46, CH_W * 2, CH_H * 2);
+  txt(j.job.toUpperCase(), 122, 46, { size: fitSize(j.job.toUpperCase(), 'ps', 8, 156, 5), color: '#f4f4f4' });
+  const fs = Math.min(12, dlgSize());
+  const place = 'Works at the ' + PLACE[j.place].name + '.';
+  let yy = 60;
+  wrap(place, 'vt', fs, 156).forEach(l => { txt(l, 122, yy, { f: 'vt', size: fs, color: '#73eff7' }); yy += fs; });
+  yy += 3;
+  wrap(cap(j.pronoun) + ' ' + j.verbS + ' ' + j.rest + '.', 'vt', fs, 156).forEach(l => { txt(l, 122, yy, { f: 'vt', size: fs, color: '#ffcd75' }); yy += fs; });
+  for (let k = 0; k < 3; k++) { const on = k < m.stars && (t - m.t) > 400 + k * 300; SP2(on ? 'i_starBig' : 'i_starOff', 126 + k * 26, 112, 2); }
+  if (button(130, 150, 60, 22, 'OK', { face: 'g', size: 8 }) || keyHit('Enter', ' ', 'Escape')) { sfx.click(); game.modal = null; }
+}
+
+/* ---------- Job Book ---------- */
+function drawBook(t) {
+  G = P;
+  R(0, 0, 320, 200, 'i'); dither(0, 0, 320, 200, 'a', G);
+  R(0, 0, 320, 22, 'a'); R(0, 21, 320, 1, 'p');
+  if (button(2, 2, 50, 18, '< BACK', { face: 'c', size: 6 }) || keyHit('Escape')) { sfx.click(); goto(game.bookFrom); }
+  txt('JOB BOOK', 60, 5, { size: 7, color: '#ffcd75', shadow: '#b13e53' });
+  txt(String(jobsDone()).padStart(2, '0') + '/' + JOBS.length, 60, 14, { size: 4.5, color: '#94b0c2' });
+  const per = 6, pages = Math.ceil(JOBS.length / per);
+  if (button(226, 2, 26, 18, '◀', { face: 'j', size: 7 }) || keyHit('ArrowLeft')) { sfx.click(); game.bookPage = (game.bookPage + pages - 1) % pages; }
+  if (button(292, 2, 26, 18, '▶', { face: 'j', size: 7 }) || keyHit('ArrowRight')) { sfx.click(); game.bookPage = (game.bookPage + 1) % pages; }
+  txt((game.bookPage + 1) + '/' + pages, 272, 8, { size: 5.5, align: 'center' });
+  const fs = Math.min(9, Math.max(7, dlgSize() - 1));
+  for (let i = 0; i < per; i++) {
+    const j = JOBS[game.bookPage * per + i]; if (!j) break;
+    const cx = 6 + (i % 3) * 104, cy = 26 + Math.floor(i / 3) * 87, cw = 100, chh = 83;
+    const got = save.jobs[j.id];
+    box(cx, cy, cw, chh, got ? 'i' : 'p', got ? 'm' : 'o');
+    if (got) {
+      const nm = j.job.toUpperCase(), ns = fitSize(nm, 'ps', 5, 92, 3.5);
+      txt(nm, cx + cw / 2, cy + 4, { size: ns, align: 'center', color: '#ffcd75' });
+      P.drawImage(charCanvas(j.id, Math.floor((t + i * 200) / 700) % 2 === 1, false), cx - 6, cy + 12, CH_W * 2, CH_H * 2);
+      let yy = cy + 13;
+      wrap('at the ' + PLACE[j.place].name, 'vt', fs, 50).forEach(l => { txt(l, cx + 47, yy, { f: 'vt', size: fs, color: '#73eff7' }); yy += fs * 0.95; });
+      yy += 2;
+      wrap(cap(j.pronoun) + ' ' + j.verbS + ' ' + j.rest + '.', 'vt', fs, 51).forEach(l => { txt(l, cx + 47, yy, { f: 'vt', size: fs, color: '#f4f4f4' }); yy += fs * 0.95; });
+      for (let k = 0; k < 3; k++) SP('i_star', cx + 60 + k * 10, cy + 72, k < got.stars ? null : { e: 'p' });
+      if (clickIn(cx, cy, cw, chh)) { sfx.click(); speak('The ' + j.job + ' ' + j.verbS + ' ' + j.rest + '.'); }
+    } else {
+      txt('???', cx + cw / 2, cy + 4, { size: 5, align: 'center', color: '#566c86' });
+      P.drawImage(charCanvas(j.id, false, false, true), cx + 24, cy + 12, CH_W * 2, CH_H * 2);
+      txt('?', cx + cw / 2 + 1, cy + 34, { size: 18, align: 'center', color: '#94b0c2' });
+    }
+  }
+}
+
+/* ---------- Settings ---------- */
+function drawSettings(t) {
+  G = P;
+  const stash = game.confirmReset ? input.click : null; if (stash) input.click = null;
+  R(0, 0, 320, 200, 'p'); dither(0, 0, 320, 200, 'a', G);
+  R(0, 0, 320, 22, 'a'); R(0, 21, 320, 1, 'o');
+  if (button(2, 2, 50, 18, '< BACK', { face: 'c', size: 6 }) || (keyHit('Escape') && !game.confirmReset)) { sfx.click(); game.confirmReset = false; goto(game.settingsFrom); }
+  txt('SETTINGS', 160, 7, { size: 8, align: 'center', color: '#ffcd75', shadow: '#b13e53' });
+  const rows = [['sound', 'SOUND', 'i_speaker'], ['music', 'MUSIC', 'i_note'], ['voice', 'VOICE', 'i_speaker'], ['labels', 'PLACE LABELS', 'i_map']];
+  rows.forEach(([key, label, icon], i) => {
+    const y = 32 + i * 30;
+    box(30, y, 260, 24);
+    SP(icon, 40, y + 8);
+    txt(label, 56, y + 8.5, { size: 7 });
+    const on = save.settings[key];
+    if (button(220, y + 3, 60, 18, on ? 'ON' : 'OFF', { face: on ? 'g' : 'c', size: 7 })) {
+      save.settings[key] = !on; persist(); audioUnlock(); updateMusic(); sfx.click();
+      if (key === 'voice' && save.settings.voice) speak('Hello! What do you do?');
+    }
+  });
+  if (!save.settings.labels) txt('Labels off: find each place by how it looks!', 160, 150, { f: 'vt', size: 10, color: '#73eff7', align: 'center' });
+  if (button(90, 166, 140, 22, 'RESET PROGRESS', { face: 'b', size: 6 })) { sfx.click(); game.confirmReset = true; }
+  if (game.confirmReset) {
+    flushLayer(); G = P; if (stash) input.click = stash;
+    dither(0, 0, 320, 200, 'a', G);
+    box(50, 50, 220, 100);
+    txt('RESET?', 160, 62, { size: 9, align: 'center', color: '#ef7d57' });
+    txt('Delete all job cards and coins?', 160, 82, { f: 'vt', size: 11, align: 'center' });
+    if (button(70, 116, 80, 22, 'YES', { face: 'c', size: 8 })) {
+      sfx.wrong(); const st = save.settings; save = freshSave(); save.settings = st; persist(); game.confirmReset = false;
+    }
+    if (button(170, 116, 80, 22, 'NO', { face: 'g', size: 8 }) || keyHit('Escape')) { sfx.click(); game.confirmReset = false; }
+  }
+}
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(60, now - lastT); lastT = now;
+  game.t += dt;
+  const t = game.t;
+  input.cursor = 'default';
+  updateMusic();
+  G = P;
+  P.clearRect(0, 0, VW, VH);
+  const blockInput = !!game.trans;
+  if (blockInput && input.click) input.click.used = true;
+  switch (game.screen) {
+    case 'title': drawTitle(t); break;
+    case 'map': drawMap(t, dt); break;
+    case 'room': { const stash = game.modal ? input.click : null; if (stash) input.click = null; drawRoom(t, dt); if (stash) input.click = stash; break; }
+    case 'book': drawBook(t); break;
+    case 'settings': drawSettings(t); break;
+  }
+  flushLayer();
+  if (game.screen === 'room' && game.modal) { G = P; drawUnlockModal(t); flushLayer(); }
+  if (game.trans) {
+    const tr = game.trans; tr.t += dt;
+    const half = tr.dur / 2, k = tr.t < half ? tr.t / half : Math.max(0, 1 - (tr.t - half) / half);
+    if (tr.t >= half && !tr.switched) { tr.switched = true; if (tr.fn) tr.fn(); game.screen = tr.to; game.sel = null; game.modal = null; floaters.length = 0; if (tr.to === 'map') game.room = null; }
+    G = P;
+    const bars = 10, bh = VH / bars;
+    for (let b = 0; b < bars; b++) { const w = Math.ceil(VW * Math.min(1, k * 1.4 - (b % 2) * 0.2)); if (w > 0) R(b % 2 ? VW - w : 0, Math.floor(b * bh), w, Math.ceil(bh), 'a'); }
+    flushLayer();
+    if (tr.t >= tr.dur) game.trans = null;
+  }
+  screenCv.style.cursor = input.cursor;
+  input.click = null;
+  input.pressed = {};
+  requestAnimationFrame(loop);
+}
+function boot() {
+  buildWorld();
+  initTraffic();
+  const s = suggestedPlace(); if (s) centerOn(s);
+  requestAnimationFrame(t => { lastT = t; loop(t); });
+}
+if (document.fonts && document.fonts.load) {
+  Promise.all([document.fonts.load("8px 'Press Start 2P'"), document.fonts.load("16px 'VT323'")]).catch(() => {}).then(() => {});
+}
+boot();
+</script>
+</body>
+</html>
