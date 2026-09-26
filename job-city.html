@@ -715,10 +715,10 @@ function pickVoice() {
 }
 if ('speechSynthesis' in window) { pickVoice(); window.speechSynthesis.onvoiceschanged = pickVoice; }
 /* the browser's built-in voice (always available as a fallback) */
-function browserSpeak(t) {
+function browserSpeak(t, append) {
   if (!('speechSynthesis' in window)) return;
   try {
-    window.speechSynthesis.cancel();
+    if (!append) window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(t);
     u.lang = voicePick ? voicePick.lang : 'en-GB';
     if (voicePick) u.voice = voicePick;
@@ -736,31 +736,45 @@ function cleanSpeech(t) {
    browser by the kokoro-js library (Apache-2.0). Nothing is downloaded
    unless the player turns NATURAL VOICE on in Settings; the model (about
    90 MB) then comes from Hugging Face once and the browser keeps it.
-   It runs in a Web Worker so the game never freezes while it talks. */
+   It runs in a Web Worker so the game never freezes while it talks.
+   Making a sentence takes a moment, so the game prepares the lines it
+   will need soon (prefetch) and speaks long lines sentence by sentence. */
 const KOKORO_URL = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js';
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
-const KVOICES = [['auto', 'AUTO'], ['bf_emma', 'EMMA (UK)'], ['bm_george', 'GEORGE (UK)'], ['af_heart', 'HEART (US)'], ['am_michael', 'MICHAEL (US)']];
-const NV = { busy: false, next: null, status: 'off', progress: 0, files: {}, worker: null, id: 0, cache: new Map(), src: null, gain: null, timer: null, err: '', device: '' };
+const KVOICES = [['auto', 'AUTO (HEART)'], ['af_bella', 'BELLA (US)'], ['am_michael', 'MICHAEL (US)'], ['bf_emma', 'EMMA (UK)'], ['bm_george', 'GEORGE (UK)']];
+const NV_SPEED = 0.95;
+const NV = { status: 'off', progress: 0, files: {}, worker: null, err: '', device: '', warmMs: 0,
+             cache: new Map(), queue: [], inflight: null, play: null, src: null, gain: null, waitSince: 0, times: [], played: 0, generated: 0 };
 function kokoroURL() { const m = /[?&]kokoro=([^&]+)/.exec(location.search); return m && /[?&]debug/.test(location.search) ? decodeURIComponent(m[1]) : KOKORO_URL; }
 /* the voice engine; this function also runs inside the worker (via toString) */
 function nvCore(post) {
-  let tts = null;
+  let tts = null, mod = null;
+  const good = a => { let s = 0; for (let i = 0; i < a.length; i += 7) { const v = a[i]; if (!isFinite(v)) return false; s += Math.abs(v); } return a.length > 1000 && s / (a.length / 7) > 0.002; };
+  const opts = (device, dtype) => ({ dtype, device, progress_callback: p => { if (p && p.status === 'progress' && p.total) post({ type: 'progress', file: p.file, loaded: p.loaded, total: p.total }); } });
+  async function load(model, device) { tts = await mod.KokoroTTS.from_pretrained(model, device === 'webgpu' ? opts('webgpu', 'fp32') : opts('wasm', 'q8')); }
+  async function warm() {
+    const t0 = performance.now(), a = await tts.generate('Hello! Welcome to Job City.', { voice: 'af_heart', speed: 0.95 });
+    const ms = performance.now() - t0, secs = a.audio.length / a.sampling_rate;
+    return { ok: good(a.audio), ms, slow: ms > secs * 3000 };
+  }
   return async function (d) {
     if (d.type === 'load') {
+      let device = d.device === 'wasm' || !d.webgpu ? 'wasm' : 'webgpu';
       try {
-        const mod = await import(d.url);
-        const opts = (device, dtype) => ({ dtype, device, progress_callback: p => { if (p && p.status === 'progress' && p.total) post({ type: 'progress', file: p.file, loaded: p.loaded, total: p.total }); } });
-        let device = d.webgpu ? 'webgpu' : 'wasm';
-        try { tts = await mod.KokoroTTS.from_pretrained(d.model, device === 'webgpu' ? opts('webgpu', 'fp32') : opts('wasm', 'q8')); }
-        catch (err) { if (device !== 'webgpu') throw err; device = 'wasm'; tts = await mod.KokoroTTS.from_pretrained(d.model, opts('wasm', 'q8')); }
-        post({ type: 'ready', device });
+        mod = await import(d.url);
+        try { await load(d.model, device); } catch (err) { if (device !== 'webgpu') throw err; device = 'wasm'; await load(d.model, device); }
+        let w = await warm();
+        if (device === 'webgpu' && (!w.ok || w.slow)) { device = 'wasm'; await load(d.model, device); w = await warm(); }
+        if (!w.ok) throw new Error('the voice made no sound');
+        post({ type: 'ready', device, warmMs: Math.round(w.ms) });
       } catch (err) { post({ type: 'error', message: String((err && err.message) || err) }); }
     } else if (d.type === 'say') {
       try {
-        const a = await tts.generate(d.text, { voice: d.voice });
+        const t0 = performance.now(), a = await tts.generate(d.text, { voice: d.voice, speed: d.speed || 1 });
+        if (!good(a.audio)) throw new Error('silent audio');
         const data = new Float32Array(a.audio);
-        post({ type: 'audio', id: d.id, key: d.key, audio: data, rate: a.sampling_rate }, [data.buffer]);
-      } catch (err) { post({ type: 'fail', id: d.id, message: String((err && err.message) || err) }); }
+        post({ type: 'audio', key: d.key, audio: data, rate: a.sampling_rate, ms: Math.round(performance.now() - t0) }, [data.buffer]);
+      } catch (err) { post({ type: 'fail', key: d.key, message: String((err && err.message) || err) }); }
     }
   };
 }
@@ -777,62 +791,117 @@ function nvStart() {
     const h = nvCore(m => nvOnMsg(m));   // no module workers: run on the main thread
     NV.worker = { postMessage: d => h(d), terminate() {} };
   }
-  NV.worker.postMessage({ type: 'load', url: kokoroURL(), model: KOKORO_MODEL, webgpu: !!navigator.gpu });
+  NV.worker.postMessage({ type: 'load', url: kokoroURL(), model: KOKORO_MODEL, webgpu: !!navigator.gpu, device: save.settings.kdevice || '' });
 }
-function nvReset() { try { if (NV.worker) NV.worker.terminate(); } catch (err) {} NV.worker = null; NV.status = 'off'; }
+function nvReset(forgetDevice) {
+  try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
+  nvStop(); NV.worker = null; NV.status = 'off'; NV.queue = []; NV.inflight = null; NV.play = null; NV.cache.clear(); NV.times = [];
+  if (forgetDevice) { delete save.settings.kdevice; persist(); }
+}
 function nvOnMsg(m) {
   if (m.type === 'progress') {
     NV.files[m.file] = [m.loaded, m.total];
     let a = 0, b = 0; for (const k in NV.files) { a += NV.files[k][0]; b += NV.files[k][1]; }
     NV.progress = b ? a / b : 0;
-  } else if (m.type === 'ready') { NV.status = 'ready'; NV.device = m.device; }
-  else if (m.type === 'error') { NV.status = 'error'; NV.err = m.message; }
-  else if (m.type === 'audio' || m.type === 'fail') nvSendNext();
-  if (m.type === 'audio') {
-    const clip = { data: m.audio, rate: m.rate };
-    NV.cache.delete(m.key); NV.cache.set(m.key, clip);
-    while (NV.cache.size > 80) NV.cache.delete(NV.cache.keys().next().value);
-    if (m.id === NV.id) { clearTimeout(NV.timer); nvPlay(clip); }
-  } else if (m.type === 'fail') {
-    if (m.id === NV.id) { clearTimeout(NV.timer); NV.id++; browserSpeak(NV.pending); }
+  } else if (m.type === 'ready') {
+    NV.status = 'ready'; NV.device = m.device; NV.warmMs = m.warmMs;
+    save.settings.kdevice = m.device; persist();
+    nvPump();
+  } else if (m.type === 'error') { NV.status = 'error'; NV.err = m.message; }
+  else if (m.type === 'audio' || m.type === 'fail') {
+    NV.inflight = null;
+    if (m.type === 'audio') {
+      NV.cache.delete(m.key); NV.cache.set(m.key, { data: m.audio, rate: m.rate });
+      while (NV.cache.size > 150) NV.cache.delete(NV.cache.keys().next().value);
+      NV.times.push(m.ms); if (NV.times.length > 12) NV.times.shift(); NV.generated++;
+    } else NV.failed = (NV.failed || 0) + 1;
+    // a line we are waiting for failed: skip that piece so the rest still plays
+    if (m.type === 'fail' && NV.play && NV.play.keys[NV.play.idx] && NV.play.keys[NV.play.idx].key === m.key) NV.play.idx++;
+    nvAdvance();
+    nvPump();
   }
 }
-/* only one sentence is generated at a time; if more arrive, only the newest waits */
-function nvSend(msg) { if (NV.busy) { NV.next = msg; return; } NV.busy = true; NV.worker.postMessage(msg); }
-function nvSendNext() { NV.busy = false; const n = NV.next; NV.next = null; if (n && n.id === NV.id) nvSend(n); }
-function nvStop() { if (NV.src) { try { NV.src.onended = null; NV.src.stop(); } catch (err) {} NV.src = null; if (musicGain) musicGain.gain.value = 0.13; } }
-function nvPlay(clip) {
+function nvAvgMs() { return NV.times.length ? NV.times.reduce((a, b) => a + b, 0) / NV.times.length : 0; }
+/* split a line into sentences (short bits like "Yes!" stay with the next sentence) */
+function nvPieces(t) {
+  const raw = t.match(/[^.!?]+[.!?]+['")\]]*|[^.!?]+$/g) || [t], out = [];
+  let carry = '';
+  raw.forEach(p => { const q = (carry + ' ' + p).trim(); if (q.length < 14) carry = q; else { out.push(q); carry = ''; } });
+  if (carry) { if (out.length) out[out.length - 1] += ' ' + carry; else out.push(carry); }
+  return out;
+}
+function nvVoiceFor(who) { const v = save.settings.kvoice || 'auto'; return v === 'auto' ? 'af_heart' : v; }
+function nvJobs(text, who) { const voice = nvVoiceFor(who); return nvPieces(cleanSpeech(text)).map(p => ({ key: voice + '|' + p, text: p, voice })); }
+/* send the next job to the worker: lines we must speak now first, then prefetches */
+function nvPump() {
+  if (NV.status !== 'ready' || NV.inflight || !NV.worker) return;
+  let j = null;
+  if (NV.play) j = NV.play.keys.slice(NV.play.idx).find(k => !NV.cache.has(k.key));
+  if (!j) { while (NV.queue.length && NV.cache.has(NV.queue[0].key)) NV.queue.shift(); j = NV.queue.shift(); }
+  if (!j) return;
+  NV.inflight = j;
+  NV.worker.postMessage({ type: 'say', key: j.key, text: j.text, voice: j.voice, speed: NV_SPEED });
+}
+/* prepare lines the game will probably say soon */
+function nvPrefetch(texts, who) {
+  if (!save.settings.natural || !save.settings.voice || NV.status === 'error' || NV.status === 'off') return;
+  (Array.isArray(texts) ? texts : [texts]).forEach(t => { if (t) nvJobs(t, who).forEach(j => { if (!NV.cache.has(j.key) && !NV.queue.some(q => q.key === j.key) && !(NV.inflight && NV.inflight.key === j.key)) NV.queue.push(j); }); });
+  while (NV.queue.length > 40) NV.queue.shift();
+  nvPump();
+}
+/* play the pieces of the current line one after another, waiting for any not made yet */
+function nvAdvance() {
+  const pl = NV.play; if (!pl || NV.src) return;
+  if (pl.idx >= pl.keys.length) { NV.play = null; NV.waitSince = 0; return; }
+  const clip = NV.cache.get(pl.keys[pl.idx].key);
+  if (!clip) { if (!NV.waitSince) NV.waitSince = performance.now(); return; }
+  NV.waitSince = 0;
+  nvPlay(clip, () => { if (NV.play === pl) { pl.idx++; nvAdvance(); nvPump(); } });
+}
+function nvStop() {
+  if (NV.src) { try { NV.src.onended = null; NV.src.stop(); } catch (err) {} NV.src = null; }
+  if (musicGain) musicGain.gain.value = 0.13;
+}
+function nvPlay(clip, done) {
   audioUnlock(); if (!AC) return;
-  nvStop();
   if (!NV.gain) { NV.gain = AC.createGain(); NV.gain.gain.value = 1; NV.gain.connect(AC.destination); }
   const b = AC.createBuffer(1, clip.data.length, clip.rate);
   b.copyToChannel(clip.data, 0);
   const s = AC.createBufferSource(); s.buffer = b; s.connect(NV.gain);
-  if (musicGain) musicGain.gain.value = 0.04;      // music gets quiet while someone talks
-  s.onended = () => { if (NV.src === s) { NV.src = null; if (musicGain) musicGain.gain.value = 0.13; } };
-  s.start(); NV.src = s; NV.played = (NV.played || 0) + 1;
+  s.onended = () => { if (NV.src === s) { NV.src = null; if (musicGain) musicGain.gain.value = 0.13; if (done) done(); } };
+  NV.src = s;
+  const go = () => { if (NV.src !== s) return; if (musicGain) musicGain.gain.value = 0.04; s.start(); NV.played++; };
+  if (AC.state === 'running') go(); else AC.resume().then(go, () => {});
 }
-function nvVoiceFor(who) { const v = save.settings.kvoice || 'auto'; return v !== 'auto' ? v : who === 'm' ? 'bm_george' : 'bf_emma'; }
 function genderOf(jobId) { const j = JOB[jobId]; return j ? (j.pronoun === 'she' ? 'f' : 'm') : undefined; }
-/* read a sentence aloud. who = 'f' / 'm' (who is talking) picks the natural voice */
-function speak(text, who) {
-  NV.id++; clearTimeout(NV.timer);
-  nvStop();
+/* read a sentence aloud. who = 'f' / 'm' (who is talking).
+   append = wait until the current line is finished instead of cutting it off */
+function speak(text, who, append) {
+  const busy = !!(append && NV.play);
+  if (!busy) { nvStop(); NV.play = null; NV.waitSince = 0; }
   if (!save.settings.voice) return;
   const t = cleanSpeech(text); if (!t) return;
   if (save.settings.natural && NV.status === 'ready' && NV.worker) {
     audioUnlock();
     if (AC) {
       try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (err) {}
-      const voice = nvVoiceFor(who), key = voice + '|' + t, hit = NV.cache.get(key);
-      if (hit) { nvPlay(hit); return; }
-      const id = NV.id; NV.pending = t;
-      nvSend({ type: 'say', id, key, text: t, voice });
-      NV.timer = setTimeout(() => { if (NV.id === id) { NV.id++; browserSpeak(t); } }, 8000);
+      const jobs = nvJobs(t, who);
+      if (busy) {
+        const pl = NV.play;
+        pl.keys = pl.keys.slice(0, pl.idx + 1).concat(pl.keys.slice(pl.idx + 1).slice(-3), jobs);   // never build a long backlog
+      } else NV.play = { keys: jobs, idx: 0, t0: performance.now() };
+      nvAdvance(); nvPump();
       return;
     }
   }
-  browserSpeak(t);
+  browserSpeak(t, append);
+}
+/* a little "..." bubble while the natural voice is still preparing a line */
+function drawVoiceWait(t) {
+  if (!NV.play || !NV.waitSince || performance.now() - NV.waitSince < 350) return;
+  const x = VW - 64, y = 44;
+  RR(x, y, 56, 20, 'rgba(20,23,38,0.85)', 4); SP('i_speaker', x + 6, y + 5);
+  for (let k = 0; k < 3; k++) R(x + 26 + k * 8, y + 9 - (Math.floor(t / 150) % 3 === k ? 2 : 0), 4, 4, '#ffcd75');
 }
 
 /* ---------- small utilities ---------- */
@@ -2818,6 +2887,9 @@ function enterRound(T) {
   const eng = ENG[r.type];
   withSeed(T.seed + T.i * 7919, () => { if (eng.init) eng.init(r, T); });
   taskSay(T, r.say || eng.say || T.def.intro, 'info');
+  // prepare the lines this round (and the next one) will probably say
+  const nx = T.rounds[T.i + 1], rightCh = r.choices && r.choices.find(c => c.ok);
+  nvPrefetch([r.says, r.reply || (r.type === 'talk' && rightCh ? rightCh.text : '') || (r.type === 'hunt' ? r.q : ''), r.answer, nx && nx.says].filter(Boolean));
   if (r.speakOnStart) speak(r.speakOnStart);
 }
 function taskSay(T, text, kind) { T.msg = { text: String(text || ''), kind: kind || 'info', shown: 0, acc: 0 }; }
@@ -3254,7 +3326,7 @@ function anyClickIn(x, y, w, h) { return clickIn(x, y, w, h); }
 let speakTimer = null;
 function speakLater(text, ms, who) {
   if (who === undefined && game.task) who = genderOf(game.task.def.speaker);
-  clearTimeout(speakTimer); speakTimer = setTimeout(() => speak(stripMarks(text), who), ms || 350);
+  clearTimeout(speakTimer); speakTimer = setTimeout(() => speak(stripMarks(text), who, true), ms || 350);
 }
 function custWho(T, r) { const c = customer(T, r); return c ? (c.female ? 'f' : 'm') : undefined; }
 
@@ -5569,7 +5641,8 @@ function startRoom(p) {
   if (!save.seen[p.id]) { save.seen[p.id] = 1; persist(); }
 }
 function startJob(r, id) {
-  r.job = JOB[id]; r.speaker = id; r.qs = makeQuestions(r.job); r.q = 0; r.hearts = 3; r.phase = 'q'; r.answered = false; r.wrongs = {}; r.fb = null;
+  r.job = JOB[id]; r.speaker = id; r.qs = makeQuestions(r.job);
+  nvPrefetch(r.qs.map(q => q.reply), genderOf(id)); r.q = 0; r.hearts = 3; r.phase = 'q'; r.answered = false; r.wrongs = {}; r.fb = null;
   setDlg(r, r.job.tag, r.qs[0].text);
 }
 function setDlg(r, tag, text, instant) {
@@ -5889,12 +5962,17 @@ function drawSettings(t) {
       txt(label, 104, y + 8, { size: 10 });
       let st;
       if (NV.status === 'loading') { st = 'Loading the voice... ' + Math.round(NV.progress * 100) + '%'; R(104, y + 30, 330, 4, '#232845'); R(104, y + 30, Math.round(330 * NV.progress), 4, '#a7f070'); }
-      else if (NV.status === 'ready') st = save.settings.natural ? 'Ready! Everyone now talks with a natural voice.' : 'Downloaded. Turn it on to use it.';
-      else if (NV.status === 'error') st = 'Not available (it needs internet). Using the normal voice.';
+      else if (NV.status === 'ready') st = save.settings.natural ? 'Ready - ' + (NV.device === 'webgpu' ? 'graphics card (WebGPU)' : 'processor (WASM)') + ' - about ' + ((nvAvgMs() || NV.warmMs) / 1000).toFixed(1) + ' s per sentence' : 'Downloaded. Turn it on to use it.';
+      else if (NV.status === 'error') st = 'Not available (' + (NV.err || 'needs internet').slice(0, 40) + '). Using the normal voice.';
       else st = 'Downloads about 90 MB once (best on Wi-Fi).';
       txt(st, 104, y + 18, { f: 'vt', size: fitSize(st, 'vt', 18, 336, 12), color: NV.status === 'error' ? '#ffcd75' : '#a9b8d0' });
     } else txt(label, 104, y + 14, { size: 10 });
     if (key === 'kvoice') {
+      if (save.settings.natural && NV.status === 'ready') {
+        if (button(226, y + 5, 90, 30, 'TEST', { face: 'j', size: 8 })) { sfx.click(); NV.test = { t0: performance.now(), g0: NV.generated }; speak('Hello! I work at the police station. I investigate crimes.', 'f'); }
+        if (button(322, y + 5, 100, 30, 'RESET', { face: 'p', size: 8 })) { sfx.click(); nvReset(true); nvStart(); }
+      }
+      if (NV.test && NV.play === null && NV.generated > NV.test.g0 && !NV.test.ms) NV.test.ms = performance.now() - NV.test.t0;
       const cur = KVOICES.findIndex(v => v[0] === (save.settings.kvoice || 'auto'));
       if (button(430, y + 5, 130, 30, KVOICES[Math.max(0, cur)][1], { face: 'h', size: 8 })) {
         sfx.click(); save.settings.kvoice = KVOICES[(Math.max(0, cur) + 1) % KVOICES.length][0]; persist(); audioUnlock();
@@ -5909,8 +5987,8 @@ function drawSettings(t) {
       if (key === 'voice' && save.settings.voice) speak('Hello! What do you do?', 'f');
     }
   });
-  if (NV.status === 'ready' && save.settings.natural && NV.announced !== true) { NV.announced = true; speak('Hello! I am your new voice.', 'f'); }
-  txt(save.settings.labels ? 'Kokoro voice: open source (Apache-2.0), runs in your browser.' : 'Labels off: find each place by how it looks!', 320, 326, { f: 'vt', size: 18, color: '#73eff7', align: 'center' });
+  const foot = NV.test && NV.test.ms ? 'Voice test: the whole line took ' + (NV.test.ms / 1000).toFixed(1) + ' s to make and say.' : save.settings.labels ? 'Kokoro voice: open source (Apache-2.0), runs in your browser.' : 'Labels off: find each place by how it looks!';
+  txt(foot, 320, 326, { f: 'vt', size: 18, color: '#73eff7', align: 'center' });
   if (button(200, 350, 240, 36, 'RESET PROGRESS', { face: 'b', size: 10 })) { sfx.click(); game.confirmReset = true; }
   if (game.confirmReset) {
     flushLayer(); G = P; if (stash) input.click = stash;
@@ -5956,6 +6034,7 @@ function frame1(dt) {
   if (stash && game.screen !== 'task') input.click = stash;
   if (stashP && game.screen !== 'task') input.pressAt = stashP;
   flushLayer();
+  if (NV.play) { G = P; drawVoiceWait(t); flushLayer(); }
   if (game.modal) {
     G = P;
     if (game.modal.kind === 'unlock') drawUnlockModal(t);
@@ -6009,7 +6088,7 @@ if (/[?&]debug/.test(location.search)) {
     step(n, dt) { for (let i = 0; i < (n || 1); i++) frame1(dt || 16); },
     click(x, y) { input.click = { x, y, used: false, touch: false }; input.mouse = true; frame1(16); },
     solveRound() { return debugSolve(); },
-    voice() { return { status: NV.status, progress: NV.progress, device: NV.device, err: NV.err, cached: NV.cache.size, played: NV.played || 0 }; },
+    voice() { return { status: NV.status, progress: NV.progress, device: NV.device, err: NV.err, warmMs: NV.warmMs, avgMs: Math.round(nvAvgMs()), cached: NV.cache.size, queue: NV.queue.length, played: NV.played, generated: NV.generated, failed: NV.failed || 0, playing: !!NV.play }; },
     lint() { return debugLint(); },
   };
 }
