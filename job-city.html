@@ -706,23 +706,31 @@ function updateMusic() {
 }
 
 /* ---------- speech (reads sentences aloud) ---------- */
-let voicePick = null;
+let voicePick = null, voicePickM = null, voicePickF = null;
+const VOICE_F = /female|woman|samantha|karen|moira|tessa|serena|victoria|kate|susan|fiona|zira|hazel|libby|sonia|aria|jenny|emma|amy|joanna|salli|kimberly|allison|ava|nicky|martha|catherine/i;
+const VOICE_M = /\bmale|\bman\b|daniel|alex\b|fred|\btom\b|oliver|arthur|rishi|david|george|mark|ryan|guy|brian|matthew|joey|justin|aaron|gordon|lee\b|james/i;
 function pickVoice() {
   try {
     const vs = window.speechSynthesis.getVoices();
-    voicePick = vs.find(v => /en[-_]GB/i.test(v.lang)) || vs.find(v => /en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
-  } catch (err) { voicePick = null; }
+    const en = [/en[-_]GB/i, /en[-_]US/i, /^en/i].map(re => vs.filter(v => re.test(v.lang)));
+    const find = test => { for (const list of en) { const v = list.find(test); if (v) return v; } return null; };
+    voicePick = find(() => true);
+    voicePickF = find(v => VOICE_F.test(v.name) && !/\bmale/i.test(v.name));
+    voicePickM = find(v => VOICE_M.test(v.name) && !VOICE_F.test(v.name));
+  } catch (err) { voicePick = voicePickM = voicePickF = null; }
 }
 if ('speechSynthesis' in window) { pickVoice(); window.speechSynthesis.onvoiceschanged = pickVoice; }
 /* the browser's built-in voice (always available as a fallback) */
-function browserSpeak(t, append) {
+function browserSpeak(t, append, who) {
   if (!('speechSynthesis' in window)) return;
   try {
     if (!append) window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(t);
-    u.lang = voicePick ? voicePick.lang : 'en-GB';
-    if (voicePick) u.voice = voicePick;
-    u.rate = 0.9; u.pitch = 1.05;
+    const own = who === 'm' ? voicePickM : voicePickF, v = own || voicePick;
+    u.lang = v ? v.lang : 'en-GB';
+    if (v) u.voice = v;
+    // no separate man's voice on this computer: a lower pitch at least
+    u.rate = 0.9; u.pitch = own ? 1 : who === 'm' ? 0.75 : 1.05;
     window.speechSynthesis.speak(u);
   } catch (err) {}
 }
@@ -741,7 +749,9 @@ function cleanSpeech(t) {
    will need soon (prefetch) and speaks long lines sentence by sentence. */
 const KOKORO_URL = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js';
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
-const KVOICES = [['auto', 'AUTO (HEART)'], ['af_bella', 'BELLA (US)'], ['am_michael', 'MICHAEL (US)'], ['bf_emma', 'EMMA (UK)'], ['bm_george', 'GEORGE (UK)']];
+/* voice styles: [id, label, voice for women, voice for men] (the best-rated Kokoro voices) */
+const KVOICES = [['auto', 'HEART+MICHAEL', 'af_heart', 'am_michael'], ['us2', 'BELLA+FENRIR', 'af_bella', 'am_fenrir'],
+                 ['uk', 'EMMA+GEORGE', 'bf_emma', 'bm_george'], ['heart', 'HEART ONLY', 'af_heart', 'af_heart']];
 const NV_SPEED = 0.95;
 const NV = { status: 'off', progress: 0, files: {}, worker: null, err: '', device: '', warmMs: 0,
              cache: new Map(), queue: [], inflight: null, play: null, src: null, gain: null, waitSince: 0, times: [], played: 0, generated: 0 };
@@ -838,7 +848,7 @@ function nvFailure(msg, stage) {
 function nvGiveUp(msg, stage) {
   try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
   NV.worker = null; NV.inflight = null; NV.status = 'error'; NV.err = msg; NV.errStage = stage || '';
-  if (NV.play) { const t = NV.play.keys.slice(NV.play.idx).map(k => k.text).join(' '); NV.play = null; NV.waitSince = 0; if (t) browserSpeak(t); }
+  if (NV.play) { const ks = NV.play.keys.slice(NV.play.idx), t = ks.map(k => k.text).join(' '); NV.play = null; NV.waitSince = 0; if (t) browserSpeak(t, false, /^.m_/.test(ks[0].voice) ? 'm' : 'f'); }
 }
 function nvReset(forgetDevice) {
   try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
@@ -884,7 +894,9 @@ function nvPieces(t) {
   if (carry) { if (out.length) out[out.length - 1] += ' ' + carry; else out.push(carry); }
   return out;
 }
-function nvVoiceFor(who) { const v = save.settings.kvoice || 'auto'; return v === 'auto' ? 'af_heart' : v; }
+/* who = 'm' for men and boys; everyone else (women, the narrator) uses the female voice */
+function kvStyle() { const v = save.settings.kvoice; return KVOICES.find(k => k[0] === v) || KVOICES.find(k => k[2] === v || k[3] === v) || KVOICES[0]; }
+function nvVoiceFor(who) { const k = kvStyle(); return who === 'm' ? k[3] : k[2]; }
 function nvJobs(text, who) { const voice = nvVoiceFor(who); return nvPieces(cleanSpeech(text)).map(p => ({ key: voice + '|' + p, text: p, voice })); }
 /* send the next job to the worker: lines we must speak now first, then prefetches */
 function nvPump() {
@@ -899,7 +911,7 @@ function nvPump() {
 /* prepare lines the game will probably say soon */
 function nvPrefetch(texts, who) {
   if (!save.settings.natural || !save.settings.voice || NV.status === 'error' || NV.status === 'off') return;
-  (Array.isArray(texts) ? texts : [texts]).forEach(t => { if (t) nvJobs(t, who).forEach(j => { if (!NV.cache.has(j.key) && !NV.queue.some(q => q.key === j.key) && !(NV.inflight && NV.inflight.key === j.key)) NV.queue.push(j); }); });
+  (Array.isArray(texts) ? texts : [texts]).forEach(it => { const [t, w] = Array.isArray(it) ? it : [it, who]; if (t) nvJobs(t, w).forEach(j => { if (!NV.cache.has(j.key) && !NV.queue.some(q => q.key === j.key) && !(NV.inflight && NV.inflight.key === j.key)) NV.queue.push(j); }); });
   while (NV.queue.length > 40) NV.queue.shift();
   nvPump();
 }
@@ -948,7 +960,7 @@ function speak(text, who, append) {
       return;
     }
   }
-  browserSpeak(t, append);
+  browserSpeak(t, append, who);
 }
 /* a little "..." bubble while the natural voice is still preparing a line */
 function drawVoiceWait(t) {
@@ -2943,7 +2955,11 @@ function enterRound(T) {
   taskSay(T, r.say || eng.say || T.def.intro, 'info');
   // prepare the lines this round (and the next one) will probably say
   const nx = T.rounds[T.i + 1], rightCh = r.choices && r.choices.find(c => c.ok);
-  nvPrefetch([r.says, r.reply || (r.type === 'talk' && rightCh ? rightCh.text : '') || (r.type === 'hunt' ? r.q : ''), r.answer, nx && nx.says].filter(Boolean));
+  // each line in the voice of whoever will say it: the customer or the worker
+  const spk = genderOf(T.def.speaker), cw = custWho(T, r), np = nx && (nx.newPerson || nx.person || T.shared.person);
+  const said = r.reply || (r.type === 'talk' && rightCh ? rightCh.text : '') || (r.type === 'hunt' ? r.q : '');
+  nvPrefetch([[r.says, cw]].concat(said ? replyLines(T, r, said) : [], [[r.answer, cw],
+              [nx && nx.says, np ? (np.female ? 'f' : 'm') : spk]]).filter(x => x[0]));
   if (r.speakOnStart) speak(r.speakOnStart);
 }
 function taskSay(T, text, kind) { T.msg = { text: String(text || ''), kind: kind || 'info', shown: 0, acc: 0 }; }
@@ -2954,7 +2970,16 @@ function taskRight(T, reply, fx, fy) {
   save.coins += 5; T.coins += 5; persist();
   addFloater('+5', fx || 560, fy || 300);
   taskSay(T, reply || r.reply || pick(['Great job!', 'Well done!', 'Correct!', 'Super!']), 'good');
-  speak(stripMarks(reply || r.reply || ''), genderOf(T.def.speaker));
+  replyLines(T, r, reply).forEach(([t, who], i) => speak(t, who, i > 0));
+}
+/* 'Where do you live? — "I live on Green Street."': the worker asks, the customer answers
+   in their own voice (and only once, when the customer says the answer anyway) */
+function replyLines(T, r, reply) {
+  const text = stripMarks(reply || r.reply || ''), spk = genderOf(T.def.speaker), cw = custWho(T, r);
+  const m = /^(.*?)\s+—\s+(.+)$/.exec(text);
+  if (!m) return [[text, spk]];
+  const ans = m[2].replace(/^["“]|["”]$/g, '');
+  return r.answer && cw ? [[m[1], spk]] : [[m[1], spk], [ans, cw || spk]];
 }
 function taskWrong(T, hint) {
   T.hearts = Math.max(0, T.hearts - 1); T.mistakes++;
@@ -6025,15 +6050,15 @@ function drawSettings(t) {
     } else txt(label, 104, y + 14, { size: 10 });
     if (key === 'kvoice') {
       if (save.settings.natural && NV.status === 'ready') {
-        if (button(226, y + 5, 90, 30, 'TEST', { face: 'j', size: 8 })) { sfx.click(); NV.test = { t0: performance.now(), g0: NV.generated }; speak('Hello! I work at the police station. I investigate crimes.', 'f'); }
+        if (button(226, y + 5, 90, 30, 'TEST', { face: 'j', size: 8 })) { sfx.click(); NV.test = { t0: performance.now(), g0: NV.generated }; speak('Hello! I work at the police station. I investigate crimes.', 'f'); speak('I am a firefighter. I put out fires.', 'm', true); }
         if (button(322, y + 5, 100, 30, 'RESET', { face: 'p', size: 8 })) { sfx.click(); nvReset(true); nvStart(); }
       }
       if (save.settings.natural && NV.status === 'error' && button(300, y + 5, 122, 30, 'TRY AGAIN', { face: 'p', size: 8 })) { sfx.click(); nvReset(); nvStart(); }
       if (NV.test && NV.play === null && NV.generated > NV.test.g0 && !NV.test.ms) NV.test.ms = performance.now() - NV.test.t0;
-      const cur = KVOICES.findIndex(v => v[0] === (save.settings.kvoice || 'auto'));
+      const cur = KVOICES.indexOf(kvStyle());
       if (button(430, y + 5, 130, 30, KVOICES[Math.max(0, cur)][1], { face: 'h', size: 8 })) {
         sfx.click(); save.settings.kvoice = KVOICES[(Math.max(0, cur) + 1) % KVOICES.length][0]; persist(); audioUnlock();
-        speak('Hello! Welcome to Job City.', save.settings.kvoice === 'auto' ? 'f' : undefined);
+        speak('Hello! Welcome to Job City.', 'f'); speak('And I am a man. Nice to meet you!', 'm', true);
       }
       return;
     }
