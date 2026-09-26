@@ -760,15 +760,24 @@ function nvCore(post) {
   return async function (d) {
     if (d.type === 'load') {
       const device = d.device === 'webgpu' ? 'webgpu' : 'wasm';
+      let stage = 'engine';
       try {
+        /* file:// pages and private windows may have no Cache API; the model loader needs one */
+        if (typeof caches === 'undefined') {
+          const box = new Map();
+          self.caches = { open: async () => ({ match: async k => box.get(String(k && k.url || k)), put: async (k, r) => { box.set(String(k && k.url || k), r); } }), match: async () => undefined, has: async () => false, delete: async () => false, keys: async () => [] };
+        }
+        post({ type: 'stage', stage: 'engine' });
         mod = await import(d.url);
+        stage = 'model'; post({ type: 'stage', stage: 'model' });
         await load(d.model, device);
+        stage = 'warm';
         post({ type: 'warming', device });
         const w = await warm();
         if (!w.ok) throw new Error(device === 'webgpu' ? 'the graphics card made no sound' : 'the voice made no sound');
         if (device === 'webgpu' && w.slow) throw new Error('the graphics card is too slow');
         post({ type: 'ready', device, warmMs: Math.round(w.ms) });
-      } catch (err) { post({ type: 'error', message: String((err && err.message) || err) }); }
+      } catch (err) { post({ type: 'error', stage, message: String((err && err.message) || err) }); }
     } else if (d.type === 'say') {
       try {
         const t0 = performance.now(), a = await tts.generate(d.text, { voice: d.voice, speed: d.speed || 1 });
@@ -780,42 +789,62 @@ function nvCore(post) {
   };
 }
 /* start the voice engine in a fresh worker. First the graphics card (WebGPU),
-   and if that fails, crashes, stays silent or hangs: the processor (WASM). */
+   and if that fails, crashes, stays silent or hangs: the processor (WASM).
+   Where it runs: a classic worker (works from file:// pages), else a module worker,
+   else the main thread. A worker that dies before saying hello moves on to the next. */
+const NV_HOSTS = ['classic', 'module', 'main'];
 function nvStart(device) {
   if (!device && (NV.status === 'loading' || NV.status === 'ready')) return;
   device = device || save.settings.kdevice || (navigator.gpu ? 'webgpu' : 'wasm');
   try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
-  clearTimeout(NV.warmTimer);
-  NV.worker = null; NV.inflight = null; NV.status = 'loading'; NV.device = device; NV.stage = 'download';
+  clearTimeout(NV.warmTimer); clearTimeout(NV.helloTimer);
+  NV.worker = null; NV.inflight = null; NV.status = 'loading'; NV.device = device; NV.stage = 'start';
   if (!NV.files) NV.files = {};
+  if (!NV.host) NV.host = 'classic';
   const src = "self.addEventListener('unhandledrejection', e => { e.preventDefault(); self.postMessage({ type: 'crash', message: String((e.reason && e.reason.message) || e.reason) }); });\n" +
     "self.addEventListener('error', e => { e.preventDefault(); self.postMessage({ type: 'crash', message: e.message || 'error' }); });\n" +
-    'const h = (' + nvCore.toString() + ')((m, t) => self.postMessage(m, t || []));\nself.onmessage = e => h(e.data);';
-  try {
-    const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
-    w.onmessage = e => { if (NV.worker === w) nvOnMsg(e.data); };
-    w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); if (NV.worker === w) nvFailure((e && e.message) || 'the voice engine stopped'); };
-    NV.worker = w;
-  } catch (err) {
-    const h = nvCore(m => nvOnMsg(m));   // no module workers: run on the main thread
+    'const h = (' + nvCore.toString() + ')((m, t) => self.postMessage(m, t || []));\nself.onmessage = e => h(e.data);\nself.postMessage({ type: \'hello\' });';
+  const onMain = () => {
+    NV.host = 'main'; NV.hello = true;
+    const h = nvCore(m => nvOnMsg(m));
     NV.worker = { postMessage: d => h(d), terminate() {} };
+  };
+  if (NV.host === 'main' || typeof Worker === 'undefined') onMain();
+  else {
+    try {
+      const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), NV.host === 'module' ? { type: 'module' } : undefined);
+      NV.hello = false;
+      w.onmessage = e => { if (NV.worker !== w) return; if (e.data && e.data.type === 'hello') { NV.hello = true; clearTimeout(NV.helloTimer); return; } nvOnMsg(e.data); };
+      w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); if (NV.worker === w) nvFailure((e && e.message) || 'the voice engine stopped'); };
+      NV.worker = w;
+      NV.helloTimer = setTimeout(() => { if (NV.worker === w && !NV.hello) nvFailure('the voice engine did not start'); }, 8000);
+    } catch (err) { NV.log = (NV.log || []).concat(NV.host + ' worker: ' + err.message).slice(-8); onMain(); }
   }
   NV.worker.postMessage({ type: 'load', url: kokoroURL(), model: KOKORO_MODEL, device });
 }
-function nvFailure(msg) {
-  clearTimeout(NV.warmTimer);
-  NV.log = (NV.log || []).concat(NV.device + ': ' + msg).slice(-6);
+function nvNextHost() { const i = NV_HOSTS.indexOf(NV.host); return NV_HOSTS[Math.min(NV_HOSTS.length - 1, i + 1)]; }
+function nvFailure(msg, stage) {
+  clearTimeout(NV.warmTimer); clearTimeout(NV.helloTimer);
+  NV.log = (NV.log || []).concat(NV.host + '/' + NV.device + (stage ? '/' + stage : '') + ': ' + msg).slice(-8);
+  // the worker itself could not run (blocked, no module support, import() not allowed there): same device, next place
+  const hostProblem = NV.host !== 'main' && (!NV.hello || /import|module/i.test(msg) && stage === 'engine');
+  if (hostProblem) { NV.host = nvNextHost(); nvStart(NV.device); return; }
+  // a download problem will not get better on another device
+  if (stage === 'engine' || stage === 'model') { nvGiveUp(msg, stage); return; }
   if (NV.device === 'webgpu') { NV.gpuErr = msg; nvStart('wasm'); return; }       // try again on the processor
   if (NV.status === 'ready' && !NV.restarted) { NV.restarted = true; nvStart('wasm'); return; }  // one restart if it stopped later
+  nvGiveUp(msg);
+}
+function nvGiveUp(msg, stage) {
   try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
-  NV.worker = null; NV.inflight = null; NV.status = 'error'; NV.err = msg;
+  NV.worker = null; NV.inflight = null; NV.status = 'error'; NV.err = msg; NV.errStage = stage || '';
   if (NV.play) { const t = NV.play.keys.slice(NV.play.idx).map(k => k.text).join(' '); NV.play = null; NV.waitSince = 0; if (t) browserSpeak(t); }
 }
 function nvReset(forgetDevice) {
   try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
   clearTimeout(NV.warmTimer);
   nvStop(); NV.worker = null; NV.status = 'off'; NV.queue = []; NV.inflight = null; NV.play = null; NV.cache.clear(); NV.times = [];
-  NV.gpuErr = ''; NV.err = ''; NV.restarted = false; NV.files = {}; NV.progress = 0;
+  NV.gpuErr = ''; NV.err = ''; NV.errStage = ''; NV.restarted = false; NV.files = {}; NV.progress = 0; NV.host = ''; NV.log = [];
   if (forgetDevice) { delete save.settings.kdevice; persist(); }
 }
 function nvOnMsg(m) {
@@ -831,7 +860,8 @@ function nvOnMsg(m) {
   } else if (m.type === 'warming') {
     NV.stage = 'warm'; clearTimeout(NV.warmTimer);
     NV.warmTimer = setTimeout(() => nvFailure('the voice took too long to start'), NV.warmLimit || 90000);
-  } else if (m.type === 'error' || m.type === 'crash') { nvFailure(m.message); }
+  } else if (m.type === 'stage') { NV.stage = m.stage; }
+  else if (m.type === 'error' || m.type === 'crash') { nvFailure(m.message, m.stage); }
   else if (m.type === 'audio' || m.type === 'fail') {
     NV.inflight = null;
     if (m.type === 'audio') {
@@ -5987,7 +6017,9 @@ function drawSettings(t) {
       let st;
       if (NV.status === 'loading') { st = (NV.gpuErr ? 'Graphics card did not work, using the processor. ' : '') + (NV.stage === 'warm' ? 'Starting the voice...' : 'Loading the voice... ' + Math.round(NV.progress * 100) + '%'); R(104, y + 30, 330, 4, '#232845'); R(104, y + 30, Math.round(330 * NV.progress), 4, '#a7f070'); }
       else if (NV.status === 'ready') st = save.settings.natural ? 'Ready - ' + (NV.device === 'webgpu' ? 'graphics card (WebGPU)' : 'processor (WASM)') + ' - about ' + ((nvAvgMs() || NV.warmMs) / 1000).toFixed(1) + ' s per sentence' : 'Downloaded. Turn it on to use it.';
-      else if (NV.status === 'error') st = 'Not available (' + (NV.err || 'needs internet').slice(0, 40) + '). Using the normal voice.';
+      else if (NV.status === 'error') st = NV.errStage === 'engine' ? 'Could not download from cdn.jsdelivr.net. Using the normal voice.'
+        : NV.errStage === 'model' ? 'Could not download from huggingface.co. Using the normal voice.'
+        : 'Not available (' + (NV.err || 'needs internet').slice(0, 40) + '). Using the normal voice.';
       else st = 'Downloads about 90 MB once (best on Wi-Fi).';
       txt(st, 104, y + 18, { f: 'vt', size: fitSize(st, 'vt', 18, 336, 12), color: NV.status === 'error' ? '#ffcd75' : '#a9b8d0' });
     } else txt(label, 104, y + 14, { size: 10 });
@@ -5996,6 +6028,7 @@ function drawSettings(t) {
         if (button(226, y + 5, 90, 30, 'TEST', { face: 'j', size: 8 })) { sfx.click(); NV.test = { t0: performance.now(), g0: NV.generated }; speak('Hello! I work at the police station. I investigate crimes.', 'f'); }
         if (button(322, y + 5, 100, 30, 'RESET', { face: 'p', size: 8 })) { sfx.click(); nvReset(true); nvStart(); }
       }
+      if (save.settings.natural && NV.status === 'error' && button(300, y + 5, 122, 30, 'TRY AGAIN', { face: 'p', size: 8 })) { sfx.click(); nvReset(); nvStart(); }
       if (NV.test && NV.play === null && NV.generated > NV.test.g0 && !NV.test.ms) NV.test.ms = performance.now() - NV.test.t0;
       const cur = KVOICES.findIndex(v => v[0] === (save.settings.kvoice || 'auto'));
       if (button(430, y + 5, 130, 30, KVOICES[Math.max(0, cur)][1], { face: 'h', size: 8 })) {
@@ -6011,8 +6044,9 @@ function drawSettings(t) {
       if (key === 'voice' && save.settings.voice) speak('Hello! What do you do?', 'f');
     }
   });
-  const foot = NV.test && NV.test.ms ? 'Voice test: the whole line took ' + (NV.test.ms / 1000).toFixed(1) + ' s to make and say.' : save.settings.labels ? 'Kokoro voice: open source (Apache-2.0), runs in your browser.' : 'Labels off: find each place by how it looks!';
-  txt(foot, 320, 326, { f: 'vt', size: 18, color: '#73eff7', align: 'center' });
+  const foot = save.settings.natural && NV.status === 'error' ? (NV.errStage ? 'Check your internet and Brave Shields / ad blocker. ' : '') + 'Error: ' + String(NV.err).slice(0, 44)
+    : NV.test && NV.test.ms ? 'Voice test: the whole line took ' + (NV.test.ms / 1000).toFixed(1) + ' s to make and say.' : save.settings.labels ? 'Kokoro voice: open source (Apache-2.0), runs in your browser.' : 'Labels off: find each place by how it looks!';
+  txt(foot, 320, 326, { f: 'vt', size: fitSize(foot, 'vt', 18, 600, 10), color: '#73eff7', align: 'center' });
   if (button(200, 350, 240, 36, 'RESET PROGRESS', { face: 'b', size: 10 })) { sfx.click(); game.confirmReset = true; }
   if (game.confirmReset) {
     flushLayer(); G = P; if (stash) input.click = stash;
@@ -6112,7 +6146,7 @@ if (/[?&]debug/.test(location.search)) {
     step(n, dt) { for (let i = 0; i < (n || 1); i++) frame1(dt || 16); },
     click(x, y) { input.click = { x, y, used: false, touch: false }; input.mouse = true; frame1(16); },
     solveRound() { return debugSolve(); },
-    voice() { return { log: NV.log || [], gpuErr: NV.gpuErr || '', status: NV.status, progress: NV.progress, device: NV.device, err: NV.err, warmMs: NV.warmMs, avgMs: Math.round(nvAvgMs()), cached: NV.cache.size, queue: NV.queue.length, played: NV.played, generated: NV.generated, failed: NV.failed || 0, playing: !!NV.play }; },
+    voice() { return { host: NV.host, stage: NV.stage, errStage: NV.errStage || '', log: NV.log || [], gpuErr: NV.gpuErr || '', status: NV.status, progress: NV.progress, device: NV.device, err: NV.err, warmMs: NV.warmMs, avgMs: Math.round(nvAvgMs()), cached: NV.cache.size, queue: NV.queue.length, played: NV.played, generated: NV.generated, failed: NV.failed || 0, playing: !!NV.play }; },
     lint() { return debugLint(); },
   };
 }
