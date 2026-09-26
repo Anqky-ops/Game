@@ -759,13 +759,14 @@ function nvCore(post) {
   }
   return async function (d) {
     if (d.type === 'load') {
-      let device = d.device === 'wasm' || !d.webgpu ? 'wasm' : 'webgpu';
+      const device = d.device === 'webgpu' ? 'webgpu' : 'wasm';
       try {
         mod = await import(d.url);
-        try { await load(d.model, device); } catch (err) { if (device !== 'webgpu') throw err; device = 'wasm'; await load(d.model, device); }
-        let w = await warm();
-        if (device === 'webgpu' && (!w.ok || w.slow)) { device = 'wasm'; await load(d.model, device); w = await warm(); }
-        if (!w.ok) throw new Error('the voice made no sound');
+        await load(d.model, device);
+        post({ type: 'warming', device });
+        const w = await warm();
+        if (!w.ok) throw new Error(device === 'webgpu' ? 'the graphics card made no sound' : 'the voice made no sound');
+        if (device === 'webgpu' && w.slow) throw new Error('the graphics card is too slow');
         post({ type: 'ready', device, warmMs: Math.round(w.ms) });
       } catch (err) { post({ type: 'error', message: String((err && err.message) || err) }); }
     } else if (d.type === 'say') {
@@ -778,24 +779,43 @@ function nvCore(post) {
     }
   };
 }
-function nvStart() {
-  if (NV.status === 'loading' || NV.status === 'ready') return;
-  NV.status = 'loading'; NV.progress = 0; NV.files = {}; NV.err = '';
-  const src = 'const h = (' + nvCore.toString() + ')((m, t) => self.postMessage(m, t || []));\nself.onmessage = e => h(e.data);';
+/* start the voice engine in a fresh worker. First the graphics card (WebGPU),
+   and if that fails, crashes, stays silent or hangs: the processor (WASM). */
+function nvStart(device) {
+  if (!device && (NV.status === 'loading' || NV.status === 'ready')) return;
+  device = device || save.settings.kdevice || (navigator.gpu ? 'webgpu' : 'wasm');
+  try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
+  clearTimeout(NV.warmTimer);
+  NV.worker = null; NV.inflight = null; NV.status = 'loading'; NV.device = device; NV.stage = 'download';
+  if (!NV.files) NV.files = {};
+  const src = "self.addEventListener('unhandledrejection', e => { e.preventDefault(); self.postMessage({ type: 'crash', message: String((e.reason && e.reason.message) || e.reason) }); });\n" +
+    "self.addEventListener('error', e => { e.preventDefault(); self.postMessage({ type: 'crash', message: e.message || 'error' }); });\n" +
+    'const h = (' + nvCore.toString() + ')((m, t) => self.postMessage(m, t || []));\nself.onmessage = e => h(e.data);';
   try {
     const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
-    w.onmessage = e => nvOnMsg(e.data);
-    w.onerror = e => { if (NV.status === 'loading') { NV.status = 'error'; NV.err = (e && e.message) || 'worker error'; } };
+    w.onmessage = e => { if (NV.worker === w) nvOnMsg(e.data); };
+    w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); if (NV.worker === w) nvFailure((e && e.message) || 'the voice engine stopped'); };
     NV.worker = w;
   } catch (err) {
     const h = nvCore(m => nvOnMsg(m));   // no module workers: run on the main thread
     NV.worker = { postMessage: d => h(d), terminate() {} };
   }
-  NV.worker.postMessage({ type: 'load', url: kokoroURL(), model: KOKORO_MODEL, webgpu: !!navigator.gpu, device: save.settings.kdevice || '' });
+  NV.worker.postMessage({ type: 'load', url: kokoroURL(), model: KOKORO_MODEL, device });
+}
+function nvFailure(msg) {
+  clearTimeout(NV.warmTimer);
+  NV.log = (NV.log || []).concat(NV.device + ': ' + msg).slice(-6);
+  if (NV.device === 'webgpu') { NV.gpuErr = msg; nvStart('wasm'); return; }       // try again on the processor
+  if (NV.status === 'ready' && !NV.restarted) { NV.restarted = true; nvStart('wasm'); return; }  // one restart if it stopped later
+  try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
+  NV.worker = null; NV.inflight = null; NV.status = 'error'; NV.err = msg;
+  if (NV.play) { const t = NV.play.keys.slice(NV.play.idx).map(k => k.text).join(' '); NV.play = null; NV.waitSince = 0; if (t) browserSpeak(t); }
 }
 function nvReset(forgetDevice) {
   try { if (NV.worker) NV.worker.terminate(); } catch (err) {}
+  clearTimeout(NV.warmTimer);
   nvStop(); NV.worker = null; NV.status = 'off'; NV.queue = []; NV.inflight = null; NV.play = null; NV.cache.clear(); NV.times = [];
+  NV.gpuErr = ''; NV.err = ''; NV.restarted = false; NV.files = {}; NV.progress = 0;
   if (forgetDevice) { delete save.settings.kdevice; persist(); }
 }
 function nvOnMsg(m) {
@@ -804,17 +824,21 @@ function nvOnMsg(m) {
     let a = 0, b = 0; for (const k in NV.files) { a += NV.files[k][0]; b += NV.files[k][1]; }
     NV.progress = b ? a / b : 0;
   } else if (m.type === 'ready') {
+    clearTimeout(NV.warmTimer);
     NV.status = 'ready'; NV.device = m.device; NV.warmMs = m.warmMs;
     save.settings.kdevice = m.device; persist();
     nvPump();
-  } else if (m.type === 'error') { NV.status = 'error'; NV.err = m.message; }
+  } else if (m.type === 'warming') {
+    NV.stage = 'warm'; clearTimeout(NV.warmTimer);
+    NV.warmTimer = setTimeout(() => nvFailure('the voice took too long to start'), NV.warmLimit || 90000);
+  } else if (m.type === 'error' || m.type === 'crash') { nvFailure(m.message); }
   else if (m.type === 'audio' || m.type === 'fail') {
     NV.inflight = null;
     if (m.type === 'audio') {
       NV.cache.delete(m.key); NV.cache.set(m.key, { data: m.audio, rate: m.rate });
       while (NV.cache.size > 150) NV.cache.delete(NV.cache.keys().next().value);
       NV.times.push(m.ms); if (NV.times.length > 12) NV.times.shift(); NV.generated++;
-    } else NV.failed = (NV.failed || 0) + 1;
+    } else { NV.failed = (NV.failed || 0) + 1; if (NV.device === 'webgpu' && (NV.gpuFails = (NV.gpuFails || 0) + 1) >= 2) { nvFailure('the graphics card keeps failing (' + m.message + ')'); return; } }
     // a line we are waiting for failed: skip that piece so the rest still plays
     if (m.type === 'fail' && NV.play && NV.play.keys[NV.play.idx] && NV.play.keys[NV.play.idx].key === m.key) NV.play.idx++;
     nvAdvance();
@@ -5961,7 +5985,7 @@ function drawSettings(t) {
     if (key === 'natural') {
       txt(label, 104, y + 8, { size: 10 });
       let st;
-      if (NV.status === 'loading') { st = 'Loading the voice... ' + Math.round(NV.progress * 100) + '%'; R(104, y + 30, 330, 4, '#232845'); R(104, y + 30, Math.round(330 * NV.progress), 4, '#a7f070'); }
+      if (NV.status === 'loading') { st = (NV.gpuErr ? 'Graphics card did not work, using the processor. ' : '') + (NV.stage === 'warm' ? 'Starting the voice...' : 'Loading the voice... ' + Math.round(NV.progress * 100) + '%'); R(104, y + 30, 330, 4, '#232845'); R(104, y + 30, Math.round(330 * NV.progress), 4, '#a7f070'); }
       else if (NV.status === 'ready') st = save.settings.natural ? 'Ready - ' + (NV.device === 'webgpu' ? 'graphics card (WebGPU)' : 'processor (WASM)') + ' - about ' + ((nvAvgMs() || NV.warmMs) / 1000).toFixed(1) + ' s per sentence' : 'Downloaded. Turn it on to use it.';
       else if (NV.status === 'error') st = 'Not available (' + (NV.err || 'needs internet').slice(0, 40) + '). Using the normal voice.';
       else st = 'Downloads about 90 MB once (best on Wi-Fi).';
@@ -6088,7 +6112,7 @@ if (/[?&]debug/.test(location.search)) {
     step(n, dt) { for (let i = 0; i < (n || 1); i++) frame1(dt || 16); },
     click(x, y) { input.click = { x, y, used: false, touch: false }; input.mouse = true; frame1(16); },
     solveRound() { return debugSolve(); },
-    voice() { return { status: NV.status, progress: NV.progress, device: NV.device, err: NV.err, warmMs: NV.warmMs, avgMs: Math.round(nvAvgMs()), cached: NV.cache.size, queue: NV.queue.length, played: NV.played, generated: NV.generated, failed: NV.failed || 0, playing: !!NV.play }; },
+    voice() { return { log: NV.log || [], gpuErr: NV.gpuErr || '', status: NV.status, progress: NV.progress, device: NV.device, err: NV.err, warmMs: NV.warmMs, avgMs: Math.round(nvAvgMs()), cached: NV.cache.size, queue: NV.queue.length, played: NV.played, generated: NV.generated, failed: NV.failed || 0, playing: !!NV.play }; },
     lint() { return debugLint(); },
   };
 }
