@@ -41,7 +41,15 @@
               sprite (how the character is drawn: skin, hair colour,
               hair style, shirt, trousers, hat, accessories, prop).
    Sentence built by the game:  "The baker bakes bread."
-   The building tasks are in the TASKS section further down.
+
+   BUILDING TASKS: search for "defTask(" to find the task of each place.
+   Most of the words live in small lists you can edit, for example
+   CASE_ATTRS / CASE_STORIES (police), AILMENTS (hospital), STORIES
+   (library), RECIPES (bakery), EXPERIMENTS (lab), POOL_RULES, TRASH,
+   PARK_ACTS, FOODS, DISHES, CITIES ...  Grammar rule cards are in
+   GRAMMAR: words in [brackets] are highlighted.
+   Open the game with ?debug at the end of the address and run
+   JC.lint() in the browser console to check your changes.
    ===================================================================== */
 const JOBS = [
   { id:'police',       job:'police officer',    place:'police',       pronoun:'she', base:'investigate', verbS:'investigates', rest:'crimes',              tag:'OFFICER SAM',  group:'safety',
@@ -2767,6 +2775,7 @@ function taskStrip(T, t, dt) {
   if (button(x + w - 34, y + 6, 28, 24, '', { icon: 'i_speaker', face: 'h' })) { sfx.click(); speak(stripMarks(m.text)); }
   if (T.state === 'right' && !game.modal) {
     const last = T.i === T.rounds.length - 1;
+    T._next = { x: x + w - 130, y: y + 32, w: 124, h: 28 };
     if (button(x + w - 130, y + 32, 124, 28, last ? 'FINISH!' : 'NEXT >', { face: 'g', size: 9 }) || keyHit('Enter', ' ')) { sfx.click(); nextRound(T); }
   }
 }
@@ -2786,6 +2795,7 @@ function textPanel(x, y, w, h, str, o) {
 /* answer buttons used by quiz / talk / board */
 function choiceButtons(r, T, x, y, w, h, gap, onRight) {
   const n = r.choices.length;
+  r._choices = r.choices.map((ch, i) => ({ ok: !!ch.ok, x, y: y + i * (h + gap), w, h }));
   r.choices.forEach((ch, i) => {
     const by = y + i * (h + gap), wrongPicked = r.wrong[i], okShown = T.state !== 'play' && ch.ok;
     const size = fitSize(stripMarks(ch.text), 'vt', Math.min(24, dlgSize() + 2), w - 44, 14);
@@ -2853,6 +2863,7 @@ ENG.build = {
     if (!r.placed.length) txt('...', px + 16, ay + 18, { f: 'vt', size, color: '#566c86', shadow: null });
     // pool
     const pPos = layout(r.pool, px + 4, 206, px + pw - 4);
+    r._ui = r.pool.map((p, i) => ({ w: p.w, x: pPos[i].x, y: pPos[i].y, W: pPos[i].w, H: 32 }));
     r.pool.forEach((p, i) => {
       const q = pPos[i];
       if (T.state !== 'play') return;
@@ -2912,6 +2923,7 @@ ENG.sort = {
     textPanel(24, 44, 592, 40, r.prompt, { paper: true, size: Math.min(24, dlgSize() + 2) });
     const bins = ENG.sort.bins(r);
     const cw = r.items[0] && r.items[0].icon ? 150 : 230, ch = 100;
+    r._ui = { bins: bins.map(b => ({ key: b.b.key, x: b.x, y: b.y, w: b.w, h: b.h })), card: { x: 320 - cw / 2, y: 100, w: cw, h: ch }, cur: r.queue && r.queue[0] && r.queue[0].key };
     // bins
     bins.forEach(bn => {
       const hot = r.drag && hitHover(bn.x, bn.y, bn.w, bn.h);
@@ -2950,7 +2962,7 @@ ENG.sort = {
     R(0, by + bh - 8, 640, 22, '#3a4052'); R(0, by + bh - 8, 640, 2, '#6b7385');
     for (let x = -(Math.floor(t / 30) % 20); x < 640; x += 20) R(x, by + bh - 4, 10, 2, '#566c86');
     for (let x = 20; x < 640; x += 60) { ELL(x, by + bh + 8, 5, 5, '#232334'); X(x, by + bh + 8, '#8e96a8'); }
-    const cw = 110, ch = 84;
+    const cw = 110, ch = 84; r._belt = [];
     const spd = r.belt.speed * (T.state === 'play' ? 1 : 0) * (1 + r.done.length * 0.06);
     let released = null;
     r.belt.items.forEach(b => {
@@ -2963,6 +2975,7 @@ ENG.sort = {
       if (T.state === 'play' && input.down && input.pressAt && !input.pressAt.used && input.pressAt.x >= x && input.pressAt.x < x + cw && input.pressAt.y >= y && input.pressAt.y < y + ch) { r.drag = b.it; r.sel = b.it; input.pressAt.used = true; sfx.pick(); }
       if (r.drag === b.it && input.down) { x = input.x - cw / 2; y = input.y - ch / 2; }
       ENG.sort.drawCard(b.it, x, y, cw, ch, r.sel === b.it);
+      (r._belt = r._belt || []).push({ key: b.it.key, x, y, w: cw, h: ch });
       if (r.sel === b.it) { frame(x - 2, y - 2, cw + 4, ch + 4, '#ffcd75'); frame(x - 3, y - 3, cw + 6, ch + 6, '#ffcd75'); }
     });
     if (r.drag && !input.down) {
@@ -2996,6 +3009,7 @@ ENG.hunt = {
     // find mode
     const size = Math.min(24, dlgSize() + 2), w = Math.min(600, measure(stripMarks(r.q), 'vt', size) + 40);
     paper(320 - w / 2, 42, w, 34, '#fff6d3'); txt(stripMarks(r.q), 320, 46, { f: 'vt', size, align: 'center', color: '#2a2440', shadow: null });
+    r._ui = actors.map(a => ({ ok: a.id === r.target, x: a.x, y: a.y, w: a.w, h: a.h }));
     let hot = null;
     actors.forEach(a => { if (hitHover(a.x, a.y, a.w, a.h)) hot = a; });
     if (hot && T.state === 'play') { frame(hot.x - 2, hot.y - 2, hot.w + 4, hot.h + 4, '#ffffff'); if (input.mouse) input.cursor = 'pointer'; }
@@ -3024,6 +3038,7 @@ ENG.place = {
     const toks = r.tokens;
     box(510, 84, 122, 240, '#232845');
     const tp = toks.map((k, i) => ({ k, x: 516 + (i % 2) * 56, y: 92 + Math.floor(i / 2) * 76, w: 54, h: 70 }));
+    r._ui = { zones: zones.map(z => ({ id: z.id, x: z.x, y: z.y, w: z.w, h: z.h })), tokens: tp };
     let hotZone = null;
     if (r.drag || r.sel) zones.forEach(z => { if (hitHover(z.x, z.y, z.w, z.h)) hotZone = z; });
     if (hotZone && T.state === 'play') { R(hotZone.x, hotZone.y, hotZone.w, hotZone.h, 'rgba(255,205,117,0.25)'); frame(hotZone.x, hotZone.y, hotZone.w, hotZone.h, '#ffcd75'); }
@@ -3101,6 +3116,7 @@ ENG.pick = {
     const bx = r.noPerson ? 16 : 230, bw = r.noPerson ? 608 : 396;
     bubble(bx, 46, bw, 84, text, r.bubbleShown, !r.noPerson);
     const n = r.cards.length, gap = 8, cw = Math.min(150, (bw - (n - 1) * gap) / n), ch = 180, x0 = bx + (bw - (n * cw + (n - 1) * gap)) / 2;
+    r._ui = r.cards.map((c, i) => ({ ok: c.ok, x: x0 + i * (cw + gap), y: 140, w: cw, h: 180 }));
     r.cards.forEach((c, i) => {
       const x = x0 + i * (cw + gap) + (r.lastWrong === i ? shakeX(T) : 0), y = 140, hot = hitHover(x, y, cw, ch) && T.state === 'play' && !r.wrong[i];
       const okShown = T.state !== 'play' && c.ok;
@@ -3142,6 +3158,7 @@ ENG.order = {
       if (filled) { const lines = wrap(filled.c, 'vt', size, 222); lines.slice(0, 2).forEach((l, j, arr) => txt(l, 56, y + sh / 2 - arr.length * size * 0.47 + j * size * 0.92, { f: 'vt', size, color: '#f4f4f4' })); }
       else if (k === r.slots.length) { if (blinkOn(t, 400)) txt('?', 60, y + sh / 2 - 9, { f: 'vt', size: 22, color: '#ffcd75' }); }
     }
+    r._ui = r.pool.map((p, k) => ({ i: p.i, x: 328, y: 92 + k * (sh + 6), w: 296, h: sh }));
     r.pool.forEach((p, k) => {
       const y = 92 + k * (sh + 6), x = 328 + (r.lastWrong === p.i ? shakeX(T) : 0);
       const lines = wrap(p.c, 'vt', size, 272);
@@ -3191,6 +3208,7 @@ ENG.pay = {
       if (T.state === 'play' && clickIn(x - 14, y - 12, 28, 24)) { r.tray.splice(k, 1); sfx.pop(); }
     });
     // money buttons
+    r._ui = MONEY.map((m, k) => ({ v: m.v, x: 48 + k * 76 - 34, y: 212 - 26, w: 68, h: 52 }));
     MONEY.forEach((m, k) => {
       const x = 48 + k * 76, y = 212, hot = hitHover(x - 34, y - 26, 68, 52) && T.state === 'play';
       RR(x - 34, y - 26, 68, 52, hot ? '#3a4360' : '#2a3158', 3);
@@ -3253,6 +3271,7 @@ ENG.route = {
     if (r.mode === 'find') {
       const size = Math.min(22, dlgSize() + 1);
       paper(40, 262, 560, 60, '#fff6d3'); para(stripMarks(r.q), 54, 270, 532, { size, color: '#2a2440', shadow: null });
+      r._ui = lots.filter(l => l.kind === 'house' && !l.deco).map(l => Object.assign({ id: l.id, ok: l.id === r.target }, lotRect(l)));
       lots.forEach(l => {
         if (l.kind !== 'house' || l.deco) return;
         const q = lotRect(l), hot = hitHover(q.x, q.y, q.w, q.h) && T.state === 'play';
@@ -3284,6 +3303,7 @@ ENG.route = {
     if (!r.moving && r.leg < P2.length - 1 && T.state === 'play') {
       const need = ENG.route.dirTo(r.path[r.leg], r.path[r.leg + 1]);
       const opts = ['Turn left', 'Go straight on', 'Turn right'];
+      r._ui = opts.map((o, i) => ({ ok: ENG.route.turnName(r.heading, need) === o, x: 60 + i * 180, y: 282, w: 170, h: 38 }));
       opts.forEach((o, i) => {
         const bx = 60 + i * 180;
         if (button(bx, 282, 170, 38, o, { f: 'vt', size: 24, face: ['j', 'g', 'e'][i], disabled: r.wrongT && r.wrongT[r.leg + '_' + i] }) || keyHit(['ArrowLeft', 'ArrowUp', 'ArrowRight'][i])) {
